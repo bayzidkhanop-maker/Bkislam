@@ -431,10 +431,10 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
               </button>
 
               {/* Chat */}
-              <button className="relative p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+              <Link to="/inbox" className="relative p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
                 <MessageSquare size={18} />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-gray-900"></span>
-              </button>
+              </Link>
 
               {/* Notifications */}
               <div className="relative">

@@ -127,7 +127,7 @@ export const UploadPage = ({ currentUser }: { currentUser: User }) => {
                   <UploadCloud className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                   <p className="text-sm text-gray-600 mb-1">Click to upload or drag and drop</p>
                   <p className="text-xs text-gray-500">
-                    {type === 'image' ? 'PNG, JPG, GIF up to 10MB' : 'MP4, WebM up to 50MB'}
+                    {type === 'image' ? 'PNG, JPG, GIF (Unlimited Local Storage)' : 'MP4, WebM (Unlimited Local Storage up to 1TB)'}
                   </p>
                 </div>
               ) : (

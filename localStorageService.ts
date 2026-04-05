@@ -19,7 +19,17 @@ interface DeenstreamDB extends DBSchema {
 
 let dbPromise: Promise<IDBPDatabase<DeenstreamDB>>;
 
-export const initDB = () => {
+export const initDB = async () => {
+  // Request persistent storage to ensure the 1TB local storage isn't cleared by the browser
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const isPersisted = await navigator.storage.persist();
+      console.log(`Persistent storage granted: ${isPersisted}`);
+    } catch (e) {
+      console.error("Failed to request persistent storage", e);
+    }
+  }
+
   dbPromise = openDB<DeenstreamDB>('deenstream-db', 1, {
     upgrade(db) {
       if (!db.objectStoreNames.contains('posts')) {

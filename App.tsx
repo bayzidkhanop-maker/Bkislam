@@ -28,9 +28,16 @@ import { TournamentDetailsPage } from './TournamentDetailsPage';
 import { TournamentManagePage } from './TournamentManagePage';
 import { TournamentCreatePage } from './TournamentCreatePage';
 
+import { InboxPage } from './inboxPage';
+import { CallOverlay } from './CallOverlay';
+import { subscribeToIncomingCalls } from './callService';
+import { Call } from './models';
+
 export const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [incomingCall, setIncomingCall] = useState<Call | null>(null);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
 
   useEffect(() => {
     initDB();
@@ -40,6 +47,18 @@ export const App = () => {
     });
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      const unsubscribe = subscribeToIncomingCalls(user.uid, (call) => {
+        setIncomingCall(call);
+        if (call && call.status === 'accepted') {
+           setActiveCallId(call.id);
+        }
+      });
+      return () => unsubscribe();
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -51,12 +70,23 @@ export const App = () => {
 
   return (
     <BrowserRouter>
+      {user && (
+        <CallOverlay 
+          currentUser={user} 
+          incomingCall={incomingCall} 
+          activeCallId={activeCallId} 
+          onCallEnd={() => {
+            setIncomingCall(null);
+            setActiveCallId(null);
+          }} 
+        />
+      )}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" /> : <LoginPage />} />
         
         <Route path="/admin" element={
           <AdminGuard user={user}>
-            <AdminPanel />
+            <AdminPanel currentUser={user!} />
           </AdminGuard>
         } />
 
@@ -78,6 +108,7 @@ export const App = () => {
             <Route path="tournaments/create" element={<TournamentCreatePage currentUser={user} />} />
             <Route path="tournaments/:id" element={<TournamentDetailsPage currentUser={user} />} />
             <Route path="tournaments/:id/manage" element={<TournamentManagePage currentUser={user} />} />
+            <Route path="inbox" element={<InboxPage currentUser={user} />} />
           </Route>
         ) : (
           <Route path="*" element={<Navigate to="/login" />} />

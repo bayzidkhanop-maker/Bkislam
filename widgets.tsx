@@ -1,10 +1,51 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { getCachedMediaBlob } from './localStorageService';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export const MediaRenderer = ({ url, type, className }: { url: string, type: 'image' | 'video', className?: string }) => {
+  const [src, setSrc] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    
+    const loadMedia = async () => {
+      if (url.startsWith('local://')) {
+        const blob = await getCachedMediaBlob(url);
+        if (blob) {
+          objectUrl = URL.createObjectURL(blob);
+          setSrc(objectUrl);
+        } else {
+          console.error("Local media not found:", url);
+        }
+      } else {
+        setSrc(url);
+      }
+      setLoading(false);
+    };
+
+    loadMedia();
+
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [url]);
+
+  if (loading) return <div className={cn("bg-gray-100 flex items-center justify-center animate-pulse", className)}></div>;
+
+  if (type === 'video') {
+    return <video src={src} controls className={className} />;
+  }
+
+  return <img src={src} alt="Media" className={className} />;
+};
 
 export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger', size?: 'sm' | 'md' | 'lg' | 'icon' }>(
   ({ className, variant = 'primary', size = 'md', ...props }, ref) => {

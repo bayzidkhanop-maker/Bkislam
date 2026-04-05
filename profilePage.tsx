@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getUser, getUserPosts, updateUser } from './firestoreService';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getUser, getUserPosts, updateUser, followUser, unfollowUser } from './firestoreService';
+import { startCall } from './callService';
 import { User, Post } from './models';
-import { Card, Button, Input, Loader } from './widgets';
+import { Card, Button, Input, Loader, MediaRenderer } from './widgets';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   Heart, MessageCircle, Calendar, FileText, Image as ImageIcon, Video, Type,
   User as UserIcon, Gamepad2, GraduationCap, Wallet, Shield, Settings,
   CheckCircle2, MapPin, Globe, Facebook, Youtube, Twitch, Trophy, Target,
   Crosshair, Medal, CreditCard, History, Bell, Moon, Sun, Lock, Smartphone,
-  LogOut, Trash2, Camera, UploadCloud
+  LogOut, Trash2, Camera, UploadCloud, Share2, Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -18,9 +19,13 @@ import { auth } from './firebaseConfig';
 import { uploadMedia } from './storageService';
 
 const TABS = [
-  { id: 'profile', label: 'Profile', icon: UserIcon },
+  { id: 'profile', label: 'About', icon: UserIcon },
+  { id: 'posts', label: 'Posts', icon: FileText },
+  { id: 'courses', label: 'Courses', icon: GraduationCap },
+  { id: 'tournaments', label: 'Tournaments', icon: Trophy },
+  { id: 'products', label: 'Products', icon: CreditCard },
   { id: 'gaming', label: 'Gaming', icon: Gamepad2 },
-  { id: 'learning', label: 'Learning', icon: GraduationCap },
+  { id: 'media', label: 'Media', icon: ImageIcon },
   { id: 'wallet', label: 'Wallet', icon: Wallet },
   { id: 'security', label: 'Security', icon: Shield },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -39,6 +44,7 @@ const activityData = [
 
 export const ProfilePage = () => {
   const { uid } = useParams<{ uid: string }>();
+  const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,6 +98,32 @@ export const ProfilePage = () => {
     }
   };
 
+  const handleFollowToggle = async () => {
+    if (!currentUser || !user) return;
+    const isFollowing = user.followers?.includes(currentUser.uid);
+    try {
+      if (isFollowing) {
+        await unfollowUser(currentUser.uid, user.uid);
+        setUser({
+          ...user,
+          followers: user.followers?.filter(id => id !== currentUser.uid) || [],
+          followersCount: Math.max(0, (user.followersCount || 0) - 1)
+        });
+        toast.success(`Unfollowed ${user.name}`);
+      } else {
+        await followUser(currentUser.uid, user.uid);
+        setUser({
+          ...user,
+          followers: [...(user.followers || []), currentUser.uid],
+          followersCount: (user.followersCount || 0) + 1
+        });
+        toast.success(`Following ${user.name}`);
+      }
+    } catch (error) {
+      toast.error('Failed to update follow status');
+    }
+  };
+
   if (loading) return <ProfileSkeleton />;
 
   if (!user) return (
@@ -104,8 +136,14 @@ export const ProfilePage = () => {
     </div>
   );
 
-  // Filter tabs based on ownership
-  const visibleTabs = isOwnProfile ? TABS : TABS.filter(t => ['profile', 'gaming', 'learning'].includes(t.id));
+  // Filter tabs based on ownership and role
+  const visibleTabs = TABS.filter(t => {
+    if (t.id === 'wallet' || t.id === 'security' || t.id === 'settings') return isOwnProfile;
+    if (t.id === 'courses') return user.role === 'instructor' || user.role === 'admin';
+    if (t.id === 'tournaments') return user.role === 'host' || user.role === 'admin';
+    if (t.id === 'products') return user.role === 'seller' || user.role === 'admin';
+    return true; // profile, posts, gaming, media
+  });
 
   return (
     <div className="max-w-5xl mx-auto p-4 sm:p-6 pb-24">
@@ -150,14 +188,102 @@ export const ProfilePage = () => {
               <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
                 <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">{user.name}</h1>
                 {user.isVerified && <CheckCircle2 className="text-blue-500 fill-blue-50" size={24} />}
+                {user.isTopPerformer && <Medal className="text-yellow-500 fill-yellow-50" size={24} />}
               </div>
-              <p className="text-gray-500 font-medium text-lg">@{user.username || user.uid.slice(0,8)}</p>
+              <div className="flex items-center justify-center sm:justify-start gap-3 mb-3">
+                <p className="text-gray-500 font-medium text-lg">@{user.username || user.uid.slice(0,8)}</p>
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wider">
+                  {user.role}
+                </span>
+                {user.level && (
+                  <span className="px-3 py-1 bg-purple-50 text-purple-700 text-xs font-bold rounded-full uppercase tracking-wider">
+                    Lvl {user.level}
+                  </span>
+                )}
+              </div>
+              
+              {/* Stats */}
+              <div className="flex items-center justify-center sm:justify-start gap-6 text-sm">
+                <div className="flex flex-col items-center sm:items-start">
+                  <span className="font-bold text-gray-900 text-lg">{user.followersCount || 0}</span>
+                  <span className="text-gray-500">Followers</span>
+                </div>
+                <div className="flex flex-col items-center sm:items-start">
+                  <span className="font-bold text-gray-900 text-lg">{user.followingCount || 0}</span>
+                  <span className="text-gray-500">Following</span>
+                </div>
+                <div className="flex flex-col items-center sm:items-start">
+                  <span className="font-bold text-gray-900 text-lg">{posts.length}</span>
+                  <span className="text-gray-500">Posts</span>
+                </div>
+                {isOwnProfile && (
+                  <div className="flex flex-col items-center sm:items-start">
+                    <span className="font-bold text-gray-900 text-lg">{user.profileViews || 0}</span>
+                    <span className="text-gray-500">Profile Views</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {!isOwnProfile && (
               <div className="flex gap-3 pb-2">
-                <Button variant="primary" className="rounded-full px-6">Follow</Button>
-                <Button variant="outline" className="rounded-full px-6">Message</Button>
+                <Button 
+                  variant={user.followers?.includes(currentUser?.uid || '') ? "outline" : "primary"} 
+                  className="rounded-full px-6"
+                  onClick={handleFollowToggle}
+                >
+                  {user.followers?.includes(currentUser?.uid || '') ? 'Following' : 'Follow'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="rounded-full px-6"
+                  onClick={async () => {
+                    try {
+                      // We need to pass currentUser here, but it's not available in ProfilePage directly.
+                      // Let's just navigate to inbox for now, and inbox will handle chat creation if needed.
+                      // Actually, we can create the chat and then navigate.
+                      // But we need currentUser. Let's assume we can navigate with state.
+                      navigate('/inbox', { state: { startChatWith: user.uid } });
+                    } catch (e) {
+                      console.error(e);
+                    }
+                  }}
+                >
+                  Message
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="rounded-full w-10 h-10 p-0 flex items-center justify-center"
+                  onClick={() => {
+                    if (currentUser && user) {
+                      startCall(currentUser.uid, user.uid, 'audio');
+                    }
+                  }}
+                >
+                  <Phone size={18} />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  className="rounded-full w-10 h-10 p-0 flex items-center justify-center"
+                  onClick={() => {
+                    if (currentUser && user) {
+                      startCall(currentUser.uid, user.uid, 'video');
+                    }
+                  }}
+                >
+                  <Video size={18} />
+                </Button>
+              </div>
+            )}
+            {isOwnProfile && (
+              <div className="flex gap-3 pb-2">
+                <Button variant="outline" className="rounded-full px-6">Edit Profile</Button>
+                <Button variant="outline" className="rounded-full w-10 h-10 p-0 flex items-center justify-center" onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  toast.success("Profile link copied!");
+                }}>
+                  <Share2 size={18} />
+                </Button>
               </div>
             )}
           </div>
@@ -211,9 +337,13 @@ export const ProfilePage = () => {
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.2 }}
         >
-          {activeTab === 'profile' && <ProfileTab user={user} posts={posts} />}
+          {activeTab === 'profile' && <ProfileTab user={user} />}
+          {activeTab === 'posts' && <PostsTab posts={posts} />}
+          {activeTab === 'courses' && <CoursesTab user={user} />}
+          {activeTab === 'tournaments' && <TournamentsTab user={user} />}
+          {activeTab === 'products' && <ProductsTab user={user} />}
           {activeTab === 'gaming' && <GamingTab user={user} />}
-          {activeTab === 'learning' && <LearningTab />}
+          {activeTab === 'media' && <MediaTab posts={posts} />}
           {activeTab === 'wallet' && isOwnProfile && <WalletTab />}
           {activeTab === 'security' && isOwnProfile && <SecurityTab />}
           {activeTab === 'settings' && isOwnProfile && <SettingsTab user={user} setUser={setUser} />}
@@ -225,7 +355,7 @@ export const ProfilePage = () => {
 
 // --- TAB COMPONENTS ---
 
-const ProfileTab = ({ user, posts }: { user: User, posts: Post[] }) => (
+const ProfileTab = ({ user }: { user: User }) => (
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div className="lg:col-span-1 space-y-6">
       <Card className="p-6">
@@ -252,10 +382,12 @@ const ProfileTab = ({ user, posts }: { user: User, posts: Post[] }) => (
           </div>
         </div>
       </Card>
+    </div>
 
+    <div className="lg:col-span-2 space-y-6">
       <Card className="p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-4">Activity Analytics</h3>
-        <div className="h-48 w-full">
+        <div className="h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={activityData}>
               <defs>
@@ -273,57 +405,141 @@ const ProfileTab = ({ user, posts }: { user: User, posts: Post[] }) => (
         </div>
       </Card>
     </div>
+  </div>
+);
 
-    <div className="lg:col-span-2">
+const PostsTab = ({ posts }: { posts: Post[] }) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between mb-6">
+      <h2 className="text-xl font-bold text-gray-900">All Posts <span className="text-gray-400 font-normal ml-1">({posts.length})</span></h2>
+    </div>
+
+    {posts.length === 0 ? (
+      <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+        <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+          <FileText size={32} />
+        </div>
+        <h3 className="text-lg font-medium text-gray-900 mb-1">No posts yet</h3>
+        <p className="text-gray-500">This user hasn't shared anything yet.</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {posts.map(post => (
+          <Link 
+            to={`/post/${post.id}`} 
+            key={post.id} 
+            className="group relative bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden aspect-square hover:shadow-md transition-all duration-200"
+          >
+            {post.type === 'image' && <MediaRenderer url={post.content} type="image" className="w-full h-full object-cover" />}
+            {post.type === 'video' && <MediaRenderer url={post.content} type="video" className="w-full h-full object-cover" />}
+            {post.type === 'text' && (
+              <div className="p-6 flex flex-col items-center justify-center h-full bg-gradient-to-br from-indigo-50 to-purple-50 text-center">
+                <Type className="text-indigo-200 mb-3" size={32} />
+                <p className="text-gray-800 font-medium line-clamp-4">{post.content}</p>
+              </div>
+            )}
+            
+            <div className="absolute top-3 right-3 p-1.5 bg-black/40 backdrop-blur-md rounded-lg text-white">
+              {post.type === 'image' && <ImageIcon size={16} />}
+              {post.type === 'video' && <Video size={16} />}
+              {post.type === 'text' && <Type size={16} />}
+            </div>
+
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-6 text-white">
+              <div className="flex items-center gap-2 font-semibold text-lg">
+                <Heart size={24} className={post.likes.length > 0 ? "fill-white" : ""} />
+                <span>{post.likes.length}</span>
+              </div>
+              <div className="flex items-center gap-2 font-semibold text-lg">
+                <MessageCircle size={24} className={post.commentsCount > 0 ? "fill-white" : ""} />
+                <span>{post.commentsCount}</span>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const MediaTab = ({ posts }: { posts: Post[] }) => {
+  const mediaPosts = posts.filter(p => p.type === 'image' || p.type === 'video');
+  return (
+    <div className="space-y-6">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-gray-900">Recent Posts <span className="text-gray-400 font-normal ml-1">({posts.length})</span></h2>
+        <h2 className="text-xl font-bold text-gray-900">Media Gallery <span className="text-gray-400 font-normal ml-1">({mediaPosts.length})</span></h2>
       </div>
 
-      {posts.length === 0 ? (
+      {mediaPosts.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
           <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FileText size={32} />
+            <ImageIcon size={32} />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">No posts yet</h3>
-          <p className="text-gray-500">This user hasn't shared anything yet.</p>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">No media yet</h3>
+          <p className="text-gray-500">This user hasn't uploaded any photos or videos.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {posts.map(post => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {mediaPosts.map(post => (
             <Link 
               to={`/post/${post.id}`} 
               key={post.id} 
-              className="group relative bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden aspect-square hover:shadow-md transition-all duration-200"
+              className="group relative bg-gray-100 rounded-xl overflow-hidden aspect-square hover:opacity-90 transition-opacity"
             >
-              {post.type === 'image' && <img src={post.content} alt="post" className="w-full h-full object-cover" loading="lazy" />}
-              {post.type === 'video' && <video src={post.content} className="w-full h-full object-cover" />}
-              {post.type === 'text' && (
-                <div className="p-6 flex flex-col items-center justify-center h-full bg-gradient-to-br from-indigo-50 to-purple-50 text-center">
-                  <Type className="text-indigo-200 mb-3" size={32} />
-                  <p className="text-gray-800 font-medium line-clamp-4">{post.content}</p>
-                </div>
-              )}
-              
-              <div className="absolute top-3 right-3 p-1.5 bg-black/40 backdrop-blur-md rounded-lg text-white">
-                {post.type === 'image' && <ImageIcon size={16} />}
-                {post.type === 'video' && <Video size={16} />}
-                {post.type === 'text' && <Type size={16} />}
-              </div>
-
-              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-6 text-white">
-                <div className="flex items-center gap-2 font-semibold text-lg">
-                  <Heart size={24} className={post.likes.length > 0 ? "fill-white" : ""} />
-                  <span>{post.likes.length}</span>
-                </div>
-                <div className="flex items-center gap-2 font-semibold text-lg">
-                  <MessageCircle size={24} className={post.commentsCount > 0 ? "fill-white" : ""} />
-                  <span>{post.commentsCount}</span>
-                </div>
+              {post.type === 'image' && <MediaRenderer url={post.content} type="image" className="w-full h-full object-cover" />}
+              {post.type === 'video' && <MediaRenderer url={post.content} type="video" className="w-full h-full object-cover" />}
+              <div className="absolute top-2 right-2 p-1 bg-black/40 backdrop-blur-md rounded text-white">
+                {post.type === 'video' ? <Video size={14} /> : <ImageIcon size={14} />}
               </div>
             </Link>
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const CoursesTab = ({ user }: { user: User }) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between mb-6">
+      <h2 className="text-xl font-bold text-gray-900">Published Courses</h2>
+    </div>
+    <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+      <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+        <GraduationCap size={32} />
+      </div>
+      <h3 className="text-lg font-medium text-gray-900 mb-1">Courses coming soon</h3>
+      <p className="text-gray-500">This instructor's courses will appear here.</p>
+    </div>
+  </div>
+);
+
+const TournamentsTab = ({ user }: { user: User }) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between mb-6">
+      <h2 className="text-xl font-bold text-gray-900">Hosted Tournaments</h2>
+    </div>
+    <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+      <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+        <Trophy size={32} />
+      </div>
+      <h3 className="text-lg font-medium text-gray-900 mb-1">Tournaments coming soon</h3>
+      <p className="text-gray-500">This host's tournaments will appear here.</p>
+    </div>
+  </div>
+);
+
+const ProductsTab = ({ user }: { user: User }) => (
+  <div className="space-y-6">
+    <div className="flex items-center justify-between mb-6">
+      <h2 className="text-xl font-bold text-gray-900">Products & PDFs</h2>
+    </div>
+    <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+      <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+        <CreditCard size={32} />
+      </div>
+      <h3 className="text-lg font-medium text-gray-900 mb-1">Products coming soon</h3>
+      <p className="text-gray-500">This seller's products will appear here.</p>
     </div>
   </div>
 );
@@ -384,35 +600,6 @@ const GamingTab = ({ user }: { user: User }) => (
         ))}
       </div>
     </Card>
-  </div>
-);
-
-const LearningTab = () => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {[1, 2, 3].map((i) => (
-        <Card key={i} className="overflow-hidden flex flex-col">
-          <div className="h-32 bg-indigo-100 relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <GraduationCap size={48} className="text-indigo-300" />
-            </div>
-          </div>
-          <div className="p-5 flex-1 flex flex-col">
-            <h4 className="font-bold text-gray-900 mb-2 line-clamp-2">Advanced Web Development Bootcamp {i}</h4>
-            <p className="text-sm text-gray-500 mb-4">Instructor Name</p>
-            <div className="mt-auto">
-              <div className="flex justify-between text-sm mb-1.5">
-                <span className="font-medium text-indigo-600">{i * 25}% Complete</span>
-                <span className="text-gray-500">12/48 Lessons</span>
-              </div>
-              <div className="w-full bg-gray-100 rounded-full h-2">
-                <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${i * 25}%` }}></div>
-              </div>
-            </div>
-          </div>
-        </Card>
-      ))}
-    </div>
   </div>
 );
 

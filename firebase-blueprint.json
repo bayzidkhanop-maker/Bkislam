@@ -1,0 +1,428 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "avatarURL": { "type": "string" },
+        "bio": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "role": { "type": "string", "enum": ["user", "admin", "instructor"] },
+        "username": { "type": "string" },
+        "phone": { "type": "string" },
+        "coverURL": { "type": "string" },
+        "country": { "type": "string" },
+        "language": { "type": "string" },
+        "isVerified": { "type": "boolean" },
+        "socialLinks": { "type": "object" },
+        "gaming": { "type": "object" },
+        "walletBalance": { "type": "number" },
+        "lockedBalance": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "withdrawnAmount": { "type": "number" }
+      },
+      "required": ["uid", "name", "email", "createdAt", "role"]
+    },
+    "Tournament": {
+      "title": "Tournament",
+      "description": "Gaming tournament",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "hostId": { "type": "string" },
+        "title": { "type": "string" },
+        "game": { "type": "string" },
+        "type": { "type": "string", "enum": ["solo", "duo", "squad"] },
+        "entryFee": { "type": "number" },
+        "prizePool": { "type": "number" },
+        "maxPlayers": { "type": "number" },
+        "registeredCount": { "type": "number" },
+        "scheduledAt": { "type": "number" },
+        "rules": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "pending", "published", "live", "completed", "cancelled"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "isPublished": { "type": "boolean" }
+      },
+      "required": ["id", "hostId", "title", "game", "type", "entryFee", "prizePool", "maxPlayers", "registeredCount", "scheduledAt", "rules", "status", "createdAt", "updatedAt", "isPublished"]
+    },
+    "TournamentRegistration": {
+      "title": "TournamentRegistration",
+      "description": "User registration for a tournament",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "userId": { "type": "string" },
+        "inGameUid": { "type": "string" },
+        "inGameName": { "type": "string" },
+        "teamId": { "type": "string" },
+        "paymentStatus": { "type": "string", "enum": ["pending", "verified", "rejected", "free"] },
+        "transactionId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "tournamentId", "userId", "inGameUid", "inGameName", "paymentStatus", "status", "createdAt"]
+    },
+    "TournamentMatch": {
+      "title": "TournamentMatch",
+      "description": "Match within a tournament",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "round": { "type": "number" },
+        "scheduledAt": { "type": "number" },
+        "roomId": { "type": "string" },
+        "roomPassword": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "live", "completed"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "tournamentId", "round", "scheduledAt", "status", "createdAt"]
+    },
+    "MatchResult": {
+      "title": "MatchResult",
+      "description": "Result of a tournament match",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "matchId": { "type": "string" },
+        "tournamentId": { "type": "string" },
+        "userId": { "type": "string" },
+        "placement": { "type": "number" },
+        "kills": { "type": "number" },
+        "points": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "matchId", "tournamentId", "userId", "placement", "kills", "points", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "completed"] },
+        "method": { "type": "string", "enum": ["bKash", "Nagad", "Rocket", "Wallet", "System"] },
+        "senderNumber": { "type": "string" },
+        "transactionId": { "type": "string" },
+        "proofUrl": { "type": "string" },
+        "note": { "type": "string" },
+        "relatedId": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "adminNote": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "amount", "status", "createdAt", "updatedAt"]
+    },
+    "WithdrawalRequest": {
+      "title": "WithdrawalRequest",
+      "description": "Request to withdraw funds",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["bKash", "Nagad", "Rocket"] },
+        "accountNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected", "completed"] },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "adminNote": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "method", "accountNumber", "status", "createdAt", "updatedAt"]
+    },
+    "Post": {
+      "title": "Post",
+      "description": "Social feed post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "type": { "type": "string", "enum": ["video", "image", "text"] },
+        "content": { "type": "string" },
+        "caption": { "type": "string" },
+        "likes": { "type": "array", "items": { "type": "string" } },
+        "commentsCount": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "uid", "type", "content", "caption", "likes", "commentsCount", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Comment on a post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "postId": { "type": "string" },
+        "uid": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "postId", "uid", "text", "createdAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Report of inappropriate content",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reportedBy": { "type": "string" },
+        "postId": { "type": "string" },
+        "reason": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "resolved"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "reportedBy", "postId", "reason", "status", "createdAt"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Private chat between users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "lastMessage": { "type": "object" },
+        "updatedAt": { "type": "number" },
+        "unreadCount": { "type": "object" },
+        "pinnedBy": { "type": "array", "items": { "type": "string" } },
+        "archivedBy": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "participants", "updatedAt", "unreadCount", "pinnedBy", "archivedBy"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Message within a chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "chatId": { "type": "string" },
+        "senderId": { "type": "string" },
+        "text": { "type": "string" },
+        "type": { "type": "string", "enum": ["text", "image", "video", "voice", "file"] },
+        "mediaUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read"] },
+        "replyTo": { "type": "string" },
+        "deletedFor": { "type": "array", "items": { "type": "string" } },
+        "isEdited": { "type": "boolean" }
+      },
+      "required": ["id", "chatId", "senderId", "text", "type", "createdAt", "status", "deletedFor"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "Audio or video call",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "callerId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "status": { "type": "string", "enum": ["calling", "ringing", "accepted", "rejected", "ended", "missed"] },
+        "type": { "type": "string", "enum": ["audio", "video"] },
+        "offer": { "type": "object" },
+        "answer": { "type": "object" },
+        "callerCandidates": { "type": "array" },
+        "receiverCandidates": { "type": "array" },
+        "startedAt": { "type": "number" },
+        "endedAt": { "type": "number" }
+      },
+      "required": ["id", "callerId", "receiverId", "status", "type", "startedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "actorUid": { "type": "string" },
+        "type": { "type": "string", "enum": ["like", "comment"] },
+        "postId": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "uid", "actorUid", "type", "postId", "read", "createdAt"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Academy course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "instructorName": { "type": "string" },
+        "price": { "type": "number" },
+        "thumbnailURL": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "level": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced", "All Levels"] },
+        "language": { "type": "string" },
+        "rating": { "type": "number" },
+        "totalReviews": { "type": "number" },
+        "studentsCount": { "type": "number" },
+        "published": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "description", "instructorId", "instructorName", "price", "thumbnailURL", "tags", "level", "language", "rating", "totalReviews", "studentsCount", "published", "createdAt"]
+    },
+    "CourseModule": {
+      "title": "CourseModule",
+      "description": "Module within a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "title": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "courseId", "instructorId", "title", "order"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Lesson within a module",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "moduleId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "instructorId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["video", "text", "file"] },
+        "content": { "type": "string" },
+        "duration": { "type": "number" },
+        "isFreePreview": { "type": "boolean" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "moduleId", "courseId", "instructorId", "title", "type", "content", "duration", "isFreePreview", "order"]
+    },
+    "Enrollment": {
+      "title": "Enrollment",
+      "description": "User enrollment in a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "progress": { "type": "number" },
+        "completedLessons": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "active", "completed"] },
+        "enrolledAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "courseId", "progress", "completedLessons", "status", "enrolledAt"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Payment for a course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "courseId": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["bKash", "Nagad", "Manual", "Free"] },
+        "transactionId": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "userId", "courseId", "amount", "method", "transactionId", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profiles"
+    },
+    "/posts/{postId}": {
+      "schema": { "$ref": "Post" },
+      "description": "Social feed posts"
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "Comment" },
+      "description": "Comments on posts"
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "Report" },
+      "description": "Reports of inappropriate content"
+    },
+    "/courses/{courseId}": {
+      "schema": { "$ref": "Course" },
+      "description": "Academy courses"
+    },
+    "/courseModules/{moduleId}": {
+      "schema": { "$ref": "CourseModule" },
+      "description": "Modules within courses"
+    },
+    "/lessons/{lessonId}": {
+      "schema": { "$ref": "Lesson" },
+      "description": "Lessons within modules"
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": { "$ref": "Enrollment" },
+      "description": "User enrollments in courses"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "Payment" },
+      "description": "Payments for courses"
+    },
+    "/transactions/{transactionId}": {
+      "schema": { "$ref": "Transaction" },
+      "description": "Financial transactions"
+    },
+    "/withdrawalRequests/{requestId}": {
+      "schema": { "$ref": "WithdrawalRequest" },
+      "description": "Requests to withdraw funds"
+    },
+    "/tournaments/{tournamentId}": {
+      "schema": { "$ref": "Tournament" },
+      "description": "Gaming tournaments"
+    },
+    "/tournamentRegistrations/{registrationId}": {
+      "schema": { "$ref": "TournamentRegistration" },
+      "description": "User registrations for tournaments"
+    },
+    "/tournamentMatches/{matchId}": {
+      "schema": { "$ref": "TournamentMatch" },
+      "description": "Matches within tournaments"
+    },
+    "/matchResults/{resultId}": {
+      "schema": { "$ref": "MatchResult" },
+      "description": "Results of tournament matches"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "Notification" },
+      "description": "User notifications"
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "Chat" },
+      "description": "Private chats between users"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "Message" },
+      "description": "Messages within chats"
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "Call" },
+      "description": "Audio or video calls"
+    },
+    "/calls/{callId}/callerCandidates/{candidateId}": {
+      "schema": { "type": "object" },
+      "description": "WebRTC ICE candidates from caller"
+    },
+    "/calls/{callId}/receiverCandidates/{candidateId}": {
+      "schema": { "type": "object" },
+      "description": "WebRTC ICE candidates from receiver"
+    }
+  }
+}

@@ -97,10 +97,10 @@ export const TournamentManagePage = ({ currentUser }: { currentUser: User }) => 
     }
   };
 
-  const handleApproveRegistration = async (regId: string, newStatus: 'approved' | 'rejected') => {
+  const handleApproveRegistration = async (reg: TournamentRegistration, newStatus: 'approved' | 'rejected') => {
     try {
-      await updateRegistrationStatus(regId, newStatus);
-      setRegistrations(registrations.map(r => r.id === regId ? { ...r, status: newStatus } : r));
+      await updateRegistrationStatus(reg.id, newStatus, reg.userId, reg.tournamentId);
+      setRegistrations(registrations.map(r => r.id === reg.id ? { ...r, status: newStatus } : r));
       toast.success(`Player ${newStatus}`);
     } catch (error) {
       toast.error("Failed to update player status");
@@ -289,8 +289,8 @@ export const TournamentManagePage = ({ currentUser }: { currentUser: User }) => 
                         <td className="py-3 px-4 text-right">
                           {reg.status === 'pending' && (
                             <div className="flex justify-end gap-2">
-                              <button onClick={() => handleApproveRegistration(reg.id, 'approved')} className="p-1.5 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded"><Check size={16}/></button>
-                              <button onClick={() => handleApproveRegistration(reg.id, 'rejected')} className="p-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded"><X size={16}/></button>
+                              <button onClick={() => handleApproveRegistration(reg, 'approved')} className="p-1.5 bg-green-500/20 text-green-400 hover:bg-green-500/30 rounded"><Check size={16}/></button>
+                              <button onClick={() => handleApproveRegistration(reg, 'rejected')} className="p-1.5 bg-red-500/20 text-red-400 hover:bg-red-500/30 rounded"><X size={16}/></button>
                             </div>
                           )}
                         </td>

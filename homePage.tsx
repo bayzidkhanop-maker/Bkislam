@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { subscribeToFeed, likePost, getUser } from './firestoreService';
 import { cachePost, getCachedFeed } from './localStorageService';
 import { Post, User } from './models';
-import { Card, Loader } from './widgets';
+import { Card, Loader, MediaRenderer } from './widgets';
 import { Heart, MessageCircle, Flag, MoreHorizontal, Share2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -171,12 +171,12 @@ export const HomePage = ({ currentUser }: { currentUser: User }) => {
                       
                       {post.type === 'image' && (
                         <div className="rounded-2xl overflow-hidden bg-gray-100 border border-gray-100">
-                          <img src={post.content} alt="post" className="w-full h-auto max-h-[600px] object-contain" loading="lazy" />
+                          <MediaRenderer url={post.content} type="image" className="w-full h-auto max-h-[600px] object-contain" />
                         </div>
                       )}
                       {post.type === 'video' && (
                         <div className="rounded-2xl overflow-hidden bg-black border border-gray-100">
-                          <video src={post.content} controls className="w-full max-h-[600px]" />
+                          <MediaRenderer url={post.content} type="video" className="w-full max-h-[600px]" />
                         </div>
                       )}
                     </div>

@@ -1,29 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  LayoutDashboard, Users, BookOpen, Trophy, Wallet, 
+  Settings, Image as ImageIcon, Bell, Shield, MessageSquare, 
+  FileText, LogOut, Menu, X, ChevronRight, Globe, Lock,
+  AlertTriangle, ShieldCheck, Trash2, ExternalLink, CheckCircle, XCircle, ArrowUpRight,
+  Search, Filter, MoreVertical, Edit, Ban
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { getAllUsers, getReportedPosts, resolveReport, deletePost, deleteUser, getAllPendingTransactions, getAllPendingWithdrawals, approveTransaction, rejectTransaction, approveWithdrawal, rejectWithdrawal, getAllTransactions } from './firestoreService';
 import { User, Report, Transaction, WithdrawalRequest } from './models';
 import { Card, Button, Loader, Input } from './widgets';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
-import { Users, AlertTriangle, ShieldCheck, Trash2, ExternalLink, Shield, Wallet, CheckCircle, XCircle, ArrowUpRight } from 'lucide-react';
-import { motion } from 'motion/react';
 
-export const AdminPanel = () => {
+export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
+  const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  
+  // Data states
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [pendingTransactions, setPendingTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'users' | 'reports' | 'financials' | 'transactions'>('users');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [adminNote, setAdminNote] = useState('');
-  
-  // Filters for transactions
+
+  // Filters
   const [txFilterStatus, setTxFilterStatus] = useState<string>('all');
   const [txFilterType, setTxFilterType] = useState<string>('all');
+  const [userSearch, setUserSearch] = useState('');
 
   useEffect(() => {
+    if (currentUser?.role !== 'admin') {
+      navigate('/');
+      return;
+    }
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -46,7 +62,28 @@ export const AdminPanel = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [currentUser, navigate]);
+
+  const handleDeleteUser = async (uid: string) => {
+    toast('Are you sure you want to delete this user?', {
+      action: {
+        label: 'Delete',
+        onClick: async () => {
+          setActionLoading(uid);
+          try {
+            await deleteUser(uid);
+            setUsers(users.filter(u => u.uid !== uid));
+            toast.success('User deleted successfully');
+          } catch (error) {
+            toast.error('Failed to delete user');
+          } finally {
+            setActionLoading(null);
+          }
+        }
+      },
+      cancel: { label: 'Cancel', onClick: () => {} }
+    });
+  };
 
   const handleResolveReport = async (reportId: string, postId: string, deleteContent: boolean) => {
     setActionLoading(reportId);
@@ -64,31 +101,6 @@ export const AdminPanel = () => {
     } finally {
       setActionLoading(null);
     }
-  };
-
-  const handleDeleteUser = async (uid: string) => {
-    // We use a custom toast instead of window.confirm for better UX
-    toast('Are you sure you want to delete this user?', {
-      action: {
-        label: 'Delete',
-        onClick: async () => {
-          setActionLoading(uid);
-          try {
-            await deleteUser(uid);
-            setUsers(users.filter(u => u.uid !== uid));
-            toast.success('User deleted successfully');
-          } catch (error) {
-            toast.error('Failed to delete user');
-          } finally {
-            setActionLoading(null);
-          }
-        }
-      },
-      cancel: {
-        label: 'Cancel',
-        onClick: () => {}
-      }
-    });
   };
 
   const handleApproveTransaction = async (tx: Transaction) => {
@@ -124,462 +136,397 @@ export const AdminPanel = () => {
     }
   };
 
-  const handleApproveWithdrawal = async (wd: WithdrawalRequest) => {
-    setActionLoading(wd.id);
-    try {
-      await approveWithdrawal(wd.id, wd.userId, wd.amount);
-      setWithdrawals(withdrawals.filter(w => w.id !== wd.id));
-      toast.success('Withdrawal approved');
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to approve withdrawal');
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  const menuItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'users', label: 'Users & Roles', icon: Users },
+    { id: 'courses', label: 'Courses', icon: BookOpen },
+    { id: 'tournaments', label: 'Tournaments', icon: Trophy },
+    { id: 'financials', label: 'Financials', icon: Wallet },
+    { id: 'reports', label: 'Moderation', icon: AlertTriangle },
+    { id: 'settings', label: 'Settings & Branding', icon: Settings },
+  ];
 
-  const handleRejectWithdrawal = async (wdId: string) => {
-    if (!adminNote) {
-      toast.error("Please provide a rejection note");
-      return;
-    }
-    setActionLoading(wdId);
-    try {
-      await rejectWithdrawal(wdId, adminNote);
-      setWithdrawals(withdrawals.filter(w => w.id !== wdId));
-      setAdminNote('');
-      toast.success('Withdrawal rejected');
-    } catch (error) {
-      toast.error('Failed to reject withdrawal');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  if (loading) return (
-    <div className="p-6 max-w-6xl mx-auto pt-12">
-      <div className="animate-pulse space-y-8">
-        <div className="h-10 bg-gray-200 rounded w-1/4"></div>
-        <div className="flex gap-4">
-          <div className="h-12 bg-gray-200 rounded w-32"></div>
-          <div className="h-12 bg-gray-200 rounded w-32"></div>
-        </div>
-        <div className="h-96 bg-gray-200 rounded-2xl"></div>
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <Loader size="lg" />
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto pb-24">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-            <Shield className="text-indigo-600" size={32} />
-            Admin Dashboard
-          </h1>
-          <p className="text-gray-500 mt-1">Manage users and content moderation</p>
-        </div>
-        <Link to="/">
-          <Button variant="outline" className="gap-2">
-            <ExternalLink size={18} />
-            Back to App
-          </Button>
-        </Link>
-      </div>
-
-      <div className="flex space-x-2 mb-8 bg-gray-100 p-1.5 rounded-xl inline-flex">
-        <button
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'users' 
-              ? 'bg-white text-indigo-600 shadow-sm' 
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-          }`}
-          onClick={() => setActiveTab('users')}
-        >
-          <Users size={18} />
-          Users
-          <span className="bg-gray-100 text-gray-600 py-0.5 px-2 rounded-full text-xs ml-1">{users.length}</span>
-        </button>
-        <button
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'reports' 
-              ? 'bg-white text-amber-600 shadow-sm' 
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-          }`}
-          onClick={() => setActiveTab('reports')}
-        >
-          <AlertTriangle size={18} />
-          Reports
-          {reports.length > 0 && (
-            <span className="bg-amber-100 text-amber-700 py-0.5 px-2 rounded-full text-xs ml-1">{reports.length}</span>
-          )}
-        </button>
-        <button
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'financials' 
-              ? 'bg-white text-green-600 shadow-sm' 
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-          }`}
-          onClick={() => setActiveTab('financials')}
-        >
-          <Wallet size={18} />
-          Financials
-          {(pendingTransactions.length + withdrawals.length) > 0 && (
-            <span className="bg-green-100 text-green-700 py-0.5 px-2 rounded-full text-xs ml-1">{pendingTransactions.length + withdrawals.length}</span>
-          )}
-        </button>
-        <button
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all duration-200 ${
-            activeTab === 'transactions' 
-              ? 'bg-white text-blue-600 shadow-sm' 
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/50'
-          }`}
-          onClick={() => setActiveTab('transactions')}
-        >
-          <ArrowUpRight size={18} />
-          Transactions
-        </button>
-      </div>
-
-      {activeTab === 'users' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <Card className="overflow-hidden border-0 shadow-sm ring-1 ring-gray-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm uppercase tracking-wider">
-                    <th className="p-4 font-semibold">User</th>
-                    <th className="p-4 font-semibold">Email</th>
-                    <th className="p-4 font-semibold">Role</th>
-                    <th className="p-4 font-semibold">Joined</th>
-                    <th className="p-4 font-semibold text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {users.map(user => (
-                    <tr key={user.uid} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-tr from-indigo-100 to-purple-100 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {user.avatarURL ? (
-                              <img src={user.avatarURL} alt="avatar" className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="text-indigo-600 font-bold text-sm">{user.name[0]?.toUpperCase()}</span>
-                            )}
-                          </div>
-                          <span className="font-medium text-gray-900">{user.name}</span>
-                        </div>
-                      </td>
-                      <td className="p-4 text-gray-600">{user.email}</td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          user.role === 'admin' ? 'bg-indigo-100 text-indigo-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="p-4 text-gray-500 text-sm">
-                        {formatDistanceToNow(user.createdAt, { addSuffix: true })}
-                      </td>
-                      <td className="p-4 text-right">
-                        {user.role !== 'admin' && (
-                          <button 
-                            onClick={() => handleDeleteUser(user.uid)} 
-                            disabled={actionLoading === user.uid}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50 p-2 rounded-lg transition-colors disabled:opacity-50"
-                            title="Delete User"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 overflow-hidden">
+      {/* Sidebar */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.aside
+            initial={{ x: -300 }}
+            animate={{ x: 0 }}
+            exit={{ x: -300 }}
+            className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col z-20 shadow-lg"
+          >
+            <div className="h-16 flex items-center px-6 border-b border-gray-200 dark:border-gray-700">
+              <Shield className="text-indigo-600 mr-2" size={24} />
+              <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Admin Pro</span>
             </div>
-          </Card>
-        </motion.div>
-      )}
-
-      {activeTab === 'reports' && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          {reports.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
-              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <ShieldCheck className="h-10 w-10 text-green-500" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">All clear!</h3>
-              <p className="text-gray-500">There are no pending reports to review.</p>
+            
+            <div className="flex-1 overflow-y-auto py-4">
+              <nav className="space-y-1 px-3">
+                {menuItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive 
+                          ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' 
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700/50'
+                      }`}
+                    >
+                      <Icon size={18} className={isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'} />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
-          ) : (
-            <div className="grid gap-4">
-              {reports.map(report => (
-                <Card key={report.id} className="border-l-4 border-l-amber-500 shadow-sm hover:shadow-md transition-shadow">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <AlertTriangle size={18} className="text-amber-500" />
-                        <h3 className="font-bold text-gray-900">Reported Content</h3>
+
+            <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+              <Link to="/">
+                <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium transition-colors">
+                  <ExternalLink size={16} />
+                  Back to App
+                </button>
+              </Link>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* Header */}
+        <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 sm:px-6 z-10 shadow-sm">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Menu size={20} />
+            </button>
+            <h1 className="text-xl font-semibold text-gray-900 dark:text-white capitalize">
+              {activeTab.replace('-', ' ')}
+            </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <button className="p-2 text-gray-400 hover:text-gray-500 relative">
+              <Bell size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+            <div className="flex items-center gap-2">
+              <img src={currentUser?.photoURL || `https://ui-avatars.com/api/?name=${currentUser?.displayName}`} alt="Admin" className="w-8 h-8 rounded-full" />
+            </div>
+          </div>
+        </header>
+
+        {/* Scrollable Content Area */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-gray-50 dark:bg-gray-900">
+          <div className="max-w-7xl mx-auto">
+            
+            {/* Dashboard View */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card className="p-6 border-0 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Users</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{users.length}</p>
                       </div>
-                      <p className="text-gray-800 mb-2"><span className="font-medium text-gray-500">Reason:</span> {report.reason}</p>
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                        <Link to={`/post/${report.postId}`} className="text-indigo-600 hover:underline flex items-center gap-1">
-                          View Post <ExternalLink size={14} />
-                        </Link>
-                        <span>•</span>
-                        <span>Reported {formatDistanceToNow(report.createdAt, { addSuffix: true })}</span>
+                      <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                        <Users size={24} />
                       </div>
                     </div>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                      <Button 
-                        variant="outline"
-                        onClick={() => handleResolveReport(report.id, report.postId, false)} 
-                        disabled={actionLoading === report.id}
-                        className="flex-1 sm:flex-none"
-                      >
-                        Dismiss
-                      </Button>
-                      <Button 
-                        variant="danger"
-                        onClick={() => handleResolveReport(report.id, report.postId, true)} 
-                        disabled={actionLoading === report.id}
-                        className="flex-1 sm:flex-none gap-2"
-                      >
-                        <Trash2 size={16} />
-                        Delete Post
-                      </Button>
+                  </Card>
+                  <Card className="p-6 border-0 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Reports</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{reports.length}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center text-amber-600 dark:text-amber-400">
+                        <AlertTriangle size={24} />
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-6 border-0 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Txs</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{pendingTransactions.length}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center text-green-600 dark:text-green-400">
+                        <Wallet size={24} />
+                      </div>
+                    </div>
+                  </Card>
+                  <Card className="p-6 border-0 shadow-sm ring-1 ring-gray-200 dark:ring-gray-800">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Revenue</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
+                          ৳ {allTransactions.filter(t => t.status === 'completed' && t.type === 'course_purchase').reduce((acc, curr) => acc + curr.amount, 0).toLocaleString()}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400">
+                        <ArrowUpRight size={24} />
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Quick Actions */}
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-8 mb-4">Quick Actions</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <button onClick={() => setActiveTab('users')} className="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-indigo-500 transition-colors text-left">
+                    <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-lg"><Users size={20}/></div>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">Manage Users</p>
+                      <p className="text-xs text-gray-500">View, edit, or ban users</p>
+                    </div>
+                  </button>
+                  <button onClick={() => setActiveTab('financials')} className="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-green-500 transition-colors text-left">
+                    <div className="p-2 bg-green-50 dark:bg-green-900/30 text-green-600 rounded-lg"><Wallet size={20}/></div>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">Review Payments</p>
+                      <p className="text-xs text-gray-500">{pendingTransactions.length} pending approvals</p>
+                    </div>
+                  </button>
+                  <button onClick={() => setActiveTab('settings')} className="flex items-center gap-3 p-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:border-purple-500 transition-colors text-left">
+                    <div className="p-2 bg-purple-50 dark:bg-purple-900/30 text-purple-600 rounded-lg"><Settings size={20}/></div>
+                    <div>
+                      <p className="font-medium text-gray-900 dark:text-white">Site Settings</p>
+                      <p className="text-xs text-gray-500">Update logo & branding</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Users View */}
+            {activeTab === 'users' && (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="relative w-64">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search users..." 
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <Button variant="outline" className="gap-2"><Filter size={16}/> Filter</Button>
+                </div>
+                
+                <Card className="overflow-hidden border-0 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
+                          <th className="p-4 font-semibold">User</th>
+                          <th className="p-4 font-semibold">Role</th>
+                          <th className="p-4 font-semibold">Joined</th>
+                          <th className="p-4 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                        {users.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
+                          <tr key={u.uid} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <img src={u.avatarURL || `https://ui-avatars.com/api/?name=${u.name}`} alt="" className="w-10 h-10 rounded-full" />
+                                <div>
+                                  <p className="font-medium text-gray-900 dark:text-white">{u.name}</p>
+                                  <p className="text-xs text-gray-500">{u.email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                u.role === 'admin' ? 'bg-indigo-100 text-indigo-800' : 
+                                u.role === 'host' ? 'bg-purple-100 text-purple-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className="p-4 text-gray-500 text-sm">
+                              {formatDistanceToNow(u.createdAt, { addSuffix: true })}
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50"><Edit size={16}/></button>
+                                <button className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg hover:bg-amber-50"><Ban size={16}/></button>
+                                {u.role !== 'admin' && (
+                                  <button 
+                                    onClick={() => handleDeleteUser(u.uid)} 
+                                    disabled={actionLoading === u.uid}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            )}
+
+            {/* Financials View */}
+            {activeTab === 'financials' && (
+              <div className="space-y-6">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Pending Transactions</h2>
+                {pendingTransactions.length === 0 ? (
+                  <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                    <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-3" />
+                    <p className="text-gray-500">All caught up! No pending transactions.</p>
+                  </div>
+                ) : (
+                  <div className="grid gap-4">
+                    {pendingTransactions.map(tx => (
+                      <Card key={tx.id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded uppercase">{tx.type.replace('_', ' ')}</span>
+                            <span className="text-sm text-gray-500">{formatDistanceToNow(tx.createdAt, { addSuffix: true })}</span>
+                          </div>
+                          <p className="font-medium text-gray-900 dark:text-white">Amount: ৳{tx.amount}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">User ID: <span className="font-mono">{tx.userId}</span></p>
+                          {tx.paymentMethod && <p className="text-sm text-gray-600 dark:text-gray-400">Method: {tx.paymentMethod}</p>}
+                          {tx.transactionId && <p className="text-sm text-gray-600 dark:text-gray-400">TrxID: <span className="font-mono font-bold">{tx.transactionId}</span></p>}
+                        </div>
+                        <div className="flex flex-col gap-2 w-full sm:w-auto">
+                          <Input 
+                            placeholder="Admin note (required for rejection)" 
+                            value={adminNote} 
+                            onChange={(e) => setAdminNote(e.target.value)}
+                            className="text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <Button 
+                              onClick={() => handleApproveTransaction(tx)} 
+                              disabled={actionLoading === tx.id}
+                              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                            >
+                              <CheckCircle size={16} className="mr-1"/> Approve
+                            </Button>
+                            <Button 
+                              onClick={() => handleRejectTransaction(tx.id)} 
+                              disabled={actionLoading === tx.id}
+                              variant="outline"
+                              className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              <XCircle size={16} className="mr-1"/> Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Settings & Branding View */}
+            {activeTab === 'settings' && (
+              <div className="space-y-6 max-w-3xl">
+                <Card className="p-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <ImageIcon size={20} className="text-indigo-600" />
+                    Logo & Branding System
+                  </h2>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Primary Logo (Light Mode)</label>
+                      <div className="flex items-center gap-4">
+                        <div className="w-32 h-12 bg-gray-100 dark:bg-gray-800 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                          <span className="text-xs text-gray-500">Preview</span>
+                        </div>
+                        <Button variant="outline">Upload Image</Button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Primary Logo (Dark Mode)</label>
+                      <div className="flex items-center gap-4">
+                        <div className="w-32 h-12 bg-gray-900 rounded border border-dashed border-gray-700 flex items-center justify-center">
+                          <span className="text-xs text-gray-400">Preview</span>
+                        </div>
+                        <Button variant="outline">Upload Image</Button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Favicon</label>
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                          <span className="text-[10px] text-gray-500">16x16</span>
+                        </div>
+                        <Button variant="outline">Upload Favicon</Button>
+                      </div>
+                    </div>
+                    <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <Button className="w-full">Save Branding Settings</Button>
                     </div>
                   </div>
                 </Card>
-              ))}
-            </div>
-          )}
-        </motion.div>
-      )}
-      {activeTab === 'financials' && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-8"
-        >
-          {/* Add Money Requests */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <Wallet className="text-green-600" size={24} />
-              Pending Add Money Requests
-            </h2>
-            {pendingTransactions.length === 0 ? (
-              <Card className="p-12 text-center text-gray-500 border-dashed">
-                <CheckCircle size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-lg font-medium text-gray-900">All caught up!</p>
-                <p>No pending add money requests.</p>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {pendingTransactions.map(tx => (
-                  <Card key={tx.id} className="p-4 sm:p-6 hover:shadow-md transition-shadow">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">Add Money</span>
-                          <h3 className="font-bold text-gray-900">৳ {tx.amount.toFixed(2)}</h3>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-1">
-                          <span className="font-medium">Method:</span> {tx.method} • <span className="font-medium">Sender:</span> {tx.senderNumber}
-                        </p>
-                        <p className="text-sm text-gray-600 mb-2">
-                          <span className="font-medium">TrxID:</span> <span className="font-mono bg-gray-100 px-1 rounded">{tx.transactionId}</span>
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          User ID: {tx.userId} • {formatDistanceToNow(tx.createdAt, { addSuffix: true })}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2 w-full sm:w-auto">
-                        <Input 
-                          placeholder="Rejection note (optional)" 
-                          value={adminNote} 
-                          onChange={(e) => setAdminNote(e.target.value)}
-                          className="text-sm"
-                        />
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="danger"
-                            onClick={() => handleRejectTransaction(tx.id)} 
-                            disabled={actionLoading === tx.id}
-                            className="flex-1"
-                          >
-                            Reject
-                          </Button>
-                          <Button 
-                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                            onClick={() => handleApproveTransaction(tx)} 
-                            disabled={actionLoading === tx.id}
-                          >
-                            Approve
-                          </Button>
-                        </div>
-                      </div>
+
+                <Card className="p-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Globe size={20} className="text-indigo-600" />
+                    Website Information
+                  </h2>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Site Name</label>
+                      <Input defaultValue="Deenstream" />
                     </div>
-                  </Card>
-                ))}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SEO Description</label>
+                      <textarea className="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" rows={3} defaultValue="The ultimate platform for learning and esports."></textarea>
+                    </div>
+                    <Button>Save Information</Button>
+                  </div>
+                </Card>
               </div>
             )}
-          </div>
 
-          {/* Withdrawal Requests */}
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <ArrowUpRight className="text-amber-600" size={24} />
-              Pending Withdrawal Requests
-            </h2>
-            {withdrawals.length === 0 ? (
-              <Card className="p-12 text-center text-gray-500 border-dashed">
-                <CheckCircle size={48} className="mx-auto text-gray-300 mb-4" />
-                <p className="text-lg font-medium text-gray-900">All caught up!</p>
-                <p>No pending withdrawal requests.</p>
-              </Card>
-            ) : (
-              <div className="grid gap-4">
-                {withdrawals.map(wd => (
-                  <Card key={wd.id} className="p-4 sm:p-6 hover:shadow-md transition-shadow border-l-4 border-amber-500">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-1 rounded uppercase tracking-wider">Withdrawal</span>
-                          <h3 className="font-bold text-gray-900">৳ {wd.amount.toFixed(2)}</h3>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-1">
-                          <span className="font-medium">Method:</span> {wd.method} • <span className="font-medium">Account:</span> {wd.accountNumber}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          User ID: {wd.userId} • {formatDistanceToNow(wd.createdAt, { addSuffix: true })}
-                        </p>
-                      </div>
-                      <div className="flex flex-col gap-2 w-full sm:w-auto">
-                        <Input 
-                          placeholder="Rejection note (optional)" 
-                          value={adminNote} 
-                          onChange={(e) => setAdminNote(e.target.value)}
-                          className="text-sm"
-                        />
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="danger"
-                            onClick={() => handleRejectWithdrawal(wd.id)} 
-                            disabled={actionLoading === wd.id}
-                            className="flex-1"
-                          >
-                            Reject
-                          </Button>
-                          <Button 
-                            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
-                            onClick={() => handleApproveWithdrawal(wd)} 
-                            disabled={actionLoading === wd.id}
-                          >
-                            Approve
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+            {/* Placeholders for other tabs */}
+            {(activeTab === 'courses' || activeTab === 'tournaments' || activeTab === 'reports') && (
+              <div className="text-center py-20">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mb-4">
+                  <Settings size={32} />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Module In Development</h2>
+                <p className="text-gray-500">The {activeTab} management module is currently being upgraded to the enterprise version.</p>
+                {activeTab === 'tournaments' && (
+                  <Link to="/tournaments" className="mt-4 inline-block">
+                    <Button>Go to Public Tournaments Page</Button>
+                  </Link>
+                )}
               </div>
             )}
-          </div>
-        </motion.div>
-      )}
-      {activeTab === 'transactions' && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="space-y-6"
-        >
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-              <select 
-                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                value={txFilterStatus}
-                onChange={(e) => setTxFilterStatus(e.target.value)}
-              >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
-                <option value="completed">Completed</option>
-              </select>
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-              <select 
-                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                value={txFilterType}
-                onChange={(e) => setTxFilterType(e.target.value)}
-              >
-                <option value="all">All Types</option>
-                <option value="add_money">Add Money</option>
-                <option value="course_purchase">Course Purchase</option>
-                <option value="course_sale">Course Sale</option>
-              </select>
-            </div>
-          </div>
 
-          <Card className="overflow-hidden border-0 shadow-sm ring-1 ring-gray-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-sm uppercase tracking-wider">
-                    <th className="p-4 font-semibold">Date</th>
-                    <th className="p-4 font-semibold">User ID</th>
-                    <th className="p-4 font-semibold">Type</th>
-                    <th className="p-4 font-semibold">Amount</th>
-                    <th className="p-4 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {allTransactions
-                    .filter(tx => txFilterStatus === 'all' || tx.status === txFilterStatus)
-                    .filter(tx => txFilterType === 'all' || tx.type === txFilterType)
-                    .map(tx => (
-                    <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="p-4 text-sm text-gray-600">
-                        {new Date(tx.createdAt).toLocaleString()}
-                      </td>
-                      <td className="p-4 text-sm font-mono text-gray-600">
-                        {tx.userId.substring(0, 8)}...
-                      </td>
-                      <td className="p-4 text-sm text-gray-900 capitalize">
-                        {tx.type.replace('_', ' ')}
-                      </td>
-                      <td className="p-4 text-sm font-bold text-gray-900">
-                        ৳ {tx.amount.toFixed(2)}
-                      </td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
-                          tx.status === 'approved' || tx.status === 'completed' ? 'bg-green-100 text-green-800' :
-                          tx.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                          'bg-amber-100 text-amber-800'
-                        }`}>
-                          {tx.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                  {allTransactions.filter(tx => txFilterStatus === 'all' || tx.status === txFilterStatus).filter(tx => txFilterType === 'all' || tx.type === txFilterType).length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="p-8 text-center text-gray-500">
-                        No transactions found matching the filters.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </motion.div>
-      )}
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

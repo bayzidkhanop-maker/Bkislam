@@ -4,7 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { subscribeToComments, addComment, getUser, likePost } from './firestoreService';
 import { Post, Comment, User } from './models';
-import { Card, Button, Input } from './widgets';
+import { Card, Button, Input, MediaRenderer } from './widgets';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft, Heart, MessageCircle, Send, Share2, MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
@@ -181,10 +181,10 @@ export const PostDetailsPage = ({ currentUser }: { currentUser: User }) => {
         {post.type !== 'text' && (
           <div className="bg-gray-50 border-y border-gray-100">
             {post.type === 'image' && (
-              <img src={post.content} alt="Post content" className="w-full max-h-[600px] object-contain" loading="lazy" />
+              <MediaRenderer url={post.content} type="image" className="w-full max-h-[600px] object-contain" />
             )}
             {post.type === 'video' && (
-              <video src={post.content} controls className="w-full max-h-[600px] bg-black" />
+              <MediaRenderer url={post.content} type="video" className="w-full max-h-[600px] bg-black" />
             )}
           </div>
         )}

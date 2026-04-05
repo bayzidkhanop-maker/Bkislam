@@ -17,7 +17,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult } from './models';
+import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult, Notification, Chat, Message, Call } from './models';
 import { generateId } from './utils';
 import { handleFirestoreError, OperationType } from './firestoreErrorHandler';
 
@@ -195,6 +195,81 @@ export const updateUser = async (uid: string, data: Partial<User>): Promise<void
     await updateDoc(doc(db, 'users', uid), data);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
+  }
+};
+
+export const followUser = async (currentUserId: string, targetUserId: string): Promise<void> => {
+  try {
+    await runTransaction(db, async (transaction) => {
+      const currentUserRef = doc(db, 'users', currentUserId);
+      const targetUserRef = doc(db, 'users', targetUserId);
+
+      const currentUserDoc = await transaction.get(currentUserRef);
+      const targetUserDoc = await transaction.get(targetUserRef);
+
+      if (!currentUserDoc.exists() || !targetUserDoc.exists()) {
+        throw new Error("User does not exist!");
+      }
+
+      transaction.update(currentUserRef, {
+        following: arrayUnion(targetUserId),
+        followingCount: increment(1)
+      });
+
+      transaction.update(targetUserRef, {
+        followers: arrayUnion(currentUserId),
+        followersCount: increment(1)
+      });
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users`);
+    throw error;
+  }
+};
+
+export const unfollowUser = async (currentUserId: string, targetUserId: string): Promise<void> => {
+  try {
+    await runTransaction(db, async (transaction) => {
+      const currentUserRef = doc(db, 'users', currentUserId);
+      const targetUserRef = doc(db, 'users', targetUserId);
+
+      const currentUserDoc = await transaction.get(currentUserRef);
+      const targetUserDoc = await transaction.get(targetUserRef);
+
+      if (!currentUserDoc.exists() || !targetUserDoc.exists()) {
+        throw new Error("User does not exist!");
+      }
+
+      transaction.update(currentUserRef, {
+        following: arrayRemove(targetUserId),
+        followingCount: increment(-1)
+      });
+
+      transaction.update(targetUserRef, {
+        followers: arrayRemove(currentUserId),
+        followersCount: increment(-1)
+      });
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users`);
+    throw error;
+  }
+};
+
+export const createNotification = async (notificationData: Omit<Notification, 'id' | 'createdAt' | 'read'>): Promise<Notification> => {
+  const id = generateId();
+  const newNotification: Notification = {
+    ...notificationData,
+    id,
+    read: false,
+    createdAt: Date.now(),
+  };
+  try {
+    await setDoc(doc(db, 'notifications', id), newNotification);
+    return newNotification;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `notifications/${id}`);
+    throw error;
   }
 };
 
@@ -798,6 +873,16 @@ export const registerForTournament = async (registrationData: Omit<TournamentReg
       transaction.set(doc(db, 'tournamentRegistrations', id), newRegistration);
       transaction.update(tRef, { registeredCount: increment(1) });
     });
+    
+    // Create notification for the user
+    await createNotification({
+      userId: registrationData.userId,
+      title: 'Tournament Registration',
+      message: `You have successfully registered for the tournament. Status: ${newRegistration.status}`,
+      type: 'system',
+      link: `/tournaments/${registrationData.tournamentId}`
+    });
+
     return newRegistration;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `tournamentRegistrations/${id}`);
@@ -827,9 +912,17 @@ export const getUserRegistrations = async (userId: string): Promise<TournamentRe
   }
 };
 
-export const updateRegistrationStatus = async (id: string, status: 'approved' | 'rejected'): Promise<void> => {
+export const updateRegistrationStatus = async (id: string, status: 'approved' | 'rejected', userId: string, tournamentId: string): Promise<void> => {
   try {
     await updateDoc(doc(db, 'tournamentRegistrations', id), { status });
+    
+    await createNotification({
+      userId,
+      title: 'Tournament Registration Update',
+      message: `Your registration has been ${status}.`,
+      type: 'system',
+      link: `/tournaments/${tournamentId}`
+    });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `tournamentRegistrations/${id}`);
     throw error;
@@ -898,4 +991,163 @@ export const getMatchResults = async (tournamentId: string): Promise<MatchResult
     throw error;
   }
 };
+
+// --- CHAT & MESSAGING ---
+
+export const createOrGetChat = async (userId1: string, userId2: string): Promise<Chat> => {
+  try {
+    // Check if chat exists
+    const q = query(collection(db, 'chats'), where('participants', 'array-contains', userId1));
+    const snapshot = await getDocs(q);
+    
+    let existingChat: Chat | null = null;
+    snapshot.forEach(doc => {
+      const chat = doc.data() as Chat;
+      if (chat.participants.includes(userId2) && chat.participants.length === 2) {
+        existingChat = chat;
+      }
+    });
+
+    if (existingChat) return existingChat;
+
+    // Create new chat
+    const id = generateId();
+    const newChat: Chat = {
+      id,
+      participants: [userId1, userId2],
+      updatedAt: Date.now(),
+      unreadCount: { [userId1]: 0, [userId2]: 0 },
+      pinnedBy: [],
+      archivedBy: []
+    };
+
+    await setDoc(doc(db, 'chats', id), newChat);
+    return newChat;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'chats');
+    throw error;
+  }
+};
+
+export const subscribeToChats = (userId: string, callback: (chats: Chat[]) => void) => {
+  const q = query(collection(db, 'chats'), where('participants', 'array-contains', userId), orderBy('updatedAt', 'desc'));
+  return onSnapshot(q, (snapshot) => {
+    const chats = snapshot.docs.map(doc => doc.data() as Chat);
+    callback(chats);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'chats');
+  });
+};
+
+export const sendMessage = async (chatId: string, senderId: string, text: string, type: Message['type'] = 'text', mediaUrl?: string, fileName?: string, fileSize?: number, replyTo?: string): Promise<Message> => {
+  const id = generateId();
+  const newMessage: Message = {
+    id,
+    chatId,
+    senderId,
+    text,
+    type,
+    mediaUrl,
+    fileName,
+    fileSize,
+    createdAt: Date.now(),
+    status: 'sent',
+    deletedFor: [],
+    replyTo
+  };
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const chatRef = doc(db, 'chats', chatId);
+      const chatDoc = await transaction.get(chatRef);
+      if (!chatDoc.exists()) throw new Error("Chat not found");
+      
+      const chat = chatDoc.data() as Chat;
+      const otherParticipants = chat.participants.filter(p => p !== senderId);
+      
+      const newUnreadCount = { ...chat.unreadCount };
+      otherParticipants.forEach(p => {
+        newUnreadCount[p] = (newUnreadCount[p] || 0) + 1;
+      });
+
+      transaction.set(doc(db, 'messages', id), newMessage);
+      transaction.update(chatRef, {
+        lastMessage: {
+          text: type === 'text' ? text : `Sent a ${type}`,
+          senderId,
+          createdAt: newMessage.createdAt,
+          type
+        },
+        updatedAt: newMessage.createdAt,
+        unreadCount: newUnreadCount
+      });
+    });
+    return newMessage;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `messages/${id}`);
+    throw error;
+  }
+};
+
+export const subscribeToMessages = (chatId: string, callback: (messages: Message[]) => void) => {
+  const q = query(collection(db, 'messages'), where('chatId', '==', chatId), orderBy('createdAt', 'asc'));
+  return onSnapshot(q, (snapshot) => {
+    const messages = snapshot.docs.map(doc => doc.data() as Message);
+    callback(messages);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'messages');
+  });
+};
+
+export const markMessagesAsRead = async (chatId: string, userId: string) => {
+  try {
+    const chatRef = doc(db, 'chats', chatId);
+    await updateDoc(chatRef, {
+      [`unreadCount.${userId}`]: 0
+    });
+    
+    // Update message status to read (simplified, usually done via batch)
+    // In a real app, you'd query unread messages and update them.
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `chats/${chatId}`);
+  }
+};
+
+export const deleteMessage = async (messageId: string, userId: string, forEveryone: boolean = false) => {
+  try {
+    const msgRef = doc(db, 'messages', messageId);
+    if (forEveryone) {
+      await deleteDoc(msgRef);
+    } else {
+      await updateDoc(msgRef, {
+        deletedFor: arrayUnion(userId)
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `messages/${messageId}`);
+  }
+};
+
+export const togglePinChat = async (chatId: string, userId: string, isPinned: boolean) => {
+  try {
+    const chatRef = doc(db, 'chats', chatId);
+    await updateDoc(chatRef, {
+      pinnedBy: isPinned ? arrayRemove(userId) : arrayUnion(userId)
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `chats/${chatId}`);
+  }
+};
+
+export const toggleArchiveChat = async (chatId: string, userId: string, isArchived: boolean) => {
+  try {
+    const chatRef = doc(db, 'chats', chatId);
+    await updateDoc(chatRef, {
+      archivedBy: isArchived ? arrayRemove(userId) : arrayUnion(userId)
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `chats/${chatId}`);
+  }
+};
+
 

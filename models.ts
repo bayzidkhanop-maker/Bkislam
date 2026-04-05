@@ -5,18 +5,30 @@ export interface User {
   avatarURL: string;
   bio: string;
   createdAt: number;
-  role: 'user' | 'admin' | 'instructor';
+  role: 'user' | 'admin' | 'instructor' | 'host' | 'seller';
   // Advanced Profile Fields
   username?: string;
   phone?: string;
   coverURL?: string;
   country?: string;
+  city?: string;
   language?: string;
   isVerified?: boolean;
+  isTopPerformer?: boolean;
+  level?: number;
+  rank?: string;
+  profileViews?: number;
+  followersCount?: number;
+  followingCount?: number;
+  followers?: string[];
+  following?: string[];
   socialLinks?: {
     facebook?: string;
     youtube?: string;
     discord?: string;
+    linkedin?: string;
+    twitter?: string;
+    website?: string;
   };
   gaming?: {
     ffUid?: string;
@@ -30,6 +42,16 @@ export interface User {
   lockedBalance?: number;
   totalEarnings?: number;
   withdrawnAmount?: number;
+  savedContent?: string[]; // Post IDs
+  likedContent?: string[]; // Post IDs
+  privacy?: {
+    isPublic: boolean;
+    showEmail: boolean;
+    showPhone: boolean;
+    allowMessagesFrom: 'everyone' | 'followers' | 'none';
+  };
+  blockedUsers?: string[];
+  badges?: string[];
 }
 
 export type TournamentStatus = 'draft' | 'pending' | 'published' | 'live' | 'completed' | 'cancelled';
@@ -145,6 +167,51 @@ export interface Report {
   reason: string;
   status: 'pending' | 'resolved';
   createdAt: number;
+}
+
+export interface Chat {
+  id: string;
+  participants: string[];
+  lastMessage?: {
+    text: string;
+    senderId: string;
+    createdAt: number;
+    type: 'text' | 'image' | 'video' | 'voice' | 'file';
+  };
+  updatedAt: number;
+  unreadCount: Record<string, number>;
+  pinnedBy: string[];
+  archivedBy: string[];
+}
+
+export interface Message {
+  id: string;
+  chatId: string;
+  senderId: string;
+  text: string;
+  type: 'text' | 'image' | 'video' | 'voice' | 'file';
+  mediaUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  createdAt: number;
+  status: 'sent' | 'delivered' | 'read';
+  replyTo?: string; // Message ID
+  deletedFor: string[];
+  isEdited?: boolean;
+}
+
+export interface Call {
+  id: string;
+  callerId: string;
+  receiverId: string;
+  status: 'calling' | 'ringing' | 'accepted' | 'rejected' | 'ended' | 'missed';
+  type: 'audio' | 'video';
+  offer?: any;
+  answer?: any;
+  callerCandidates?: any[];
+  receiverCandidates?: any[];
+  startedAt: number;
+  endedAt?: number;
 }
 
 export interface Notification {

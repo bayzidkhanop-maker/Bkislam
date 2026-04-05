@@ -1,8 +1,25 @@
-export const uploadMedia = async (file: File, path: string, onProgress?: (progress: number) => void): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    if (onProgress) onProgress(25);
+import { cacheMediaBlob } from './localStorageService';
 
-    // If it's an image, compress it to avoid Firestore 1MB limit
+export const uploadMedia = async (file: File, path: string, onProgress?: (progress: number) => void): Promise<string> => {
+  return new Promise(async (resolve, reject) => {
+    if (onProgress) onProgress(10);
+
+    // For videos or large files, store in local IndexedDB to bypass Firestore 1MB limit
+    // and simulate "1TB Local Storage"
+    if (file.type.startsWith('video/') || file.size > 800 * 1024) {
+      try {
+        const localUrl = `local://${path}-${file.name}`;
+        if (onProgress) onProgress(50);
+        await cacheMediaBlob(localUrl, file);
+        if (onProgress) onProgress(100);
+        resolve(localUrl);
+      } catch (err) {
+        reject(err);
+      }
+      return;
+    }
+
+    // If it's a small image, compress it to avoid Firestore 1MB limit
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -40,7 +57,7 @@ export const uploadMedia = async (file: File, path: string, onProgress?: (progre
       reader.onerror = reject;
       reader.readAsDataURL(file);
     } else {
-      // For videos or other files, just read as base64 (Note: large videos will fail in Firestore)
+      // Small non-image files
       const reader = new FileReader();
       reader.onload = () => {
         if (onProgress) onProgress(100);
