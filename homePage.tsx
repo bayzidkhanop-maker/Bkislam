@@ -8,6 +8,7 @@ import { Heart, MessageCircle, Flag, MoreHorizontal, Share2 } from 'lucide-react
 import { formatDistanceToNow } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
+import { PostCard } from './components/PostCard';
 
 export const HomePage = ({ currentUser }: { currentUser: User }) => {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -130,101 +131,18 @@ export const HomePage = ({ currentUser }: { currentUser: User }) => {
             if (!isLiked && actualIsLiked) displayLikes--;
 
             return (
-              <motion.div
+              <PostCard
                 key={post.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <Link to={`/profile/${post.uid}`} className="flex items-center space-x-3 group">
-                        <div className="w-11 h-11 bg-gradient-to-tr from-indigo-100 to-purple-100 rounded-full flex items-center justify-center overflow-hidden ring-2 ring-white shadow-sm">
-                          {author?.avatarURL ? (
-                            <img src={author.avatarURL} alt="avatar" className="w-full h-full object-cover" />
-                          ) : (
-                            <span className="text-indigo-600 font-semibold text-lg">{author?.name?.[0]?.toUpperCase()}</span>
-                          )}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                            {author?.name || 'Unknown User'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {formatDistanceToNow(post.createdAt, { addSuffix: true })}
-                          </p>
-                        </div>
-                      </Link>
-                      <button className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-50 transition-colors">
-                        <MoreHorizontal size={20} />
-                      </button>
-                    </div>
-
-                    <div className="mb-4">
-                      {post.type === 'text' ? (
-                        <p className="text-gray-800 text-lg leading-relaxed whitespace-pre-wrap">{post.content}</p>
-                      ) : (
-                        <p className="text-gray-800 mb-3">{post.caption}</p>
-                      )}
-                      
-                      {post.type === 'image' && (
-                        <div className="rounded-2xl overflow-hidden bg-gray-100 border border-gray-100">
-                          <MediaRenderer url={post.content} type="image" className="w-full h-auto max-h-[600px] object-contain" />
-                        </div>
-                      )}
-                      {post.type === 'video' && (
-                        <div className="rounded-2xl overflow-hidden bg-black border border-gray-100">
-                          <MediaRenderer url={post.content} type="video" className="w-full max-h-[600px]" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="px-5 py-3 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <motion.button 
-                        whileTap={{ scale: 0.85 }}
-                        onClick={() => handleLike(post.id, isLiked)}
-                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors ${
-                          isLiked 
-                            ? 'text-red-500 bg-red-50 hover:bg-red-100' 
-                            : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                      >
-                        <Heart size={20} className={isLiked ? "fill-current" : ""} />
-                        <span className="font-medium text-sm">{displayLikes > 0 ? displayLikes : 'Like'}</span>
-                      </motion.button>
-
-                      <Link 
-                        to={`/post/${post.id}`} 
-                        className="flex items-center space-x-2 px-3 py-1.5 rounded-full text-gray-600 hover:bg-gray-100 transition-colors"
-                      >
-                        <MessageCircle size={20} />
-                        <span className="font-medium text-sm">{post.commentsCount > 0 ? post.commentsCount : 'Comment'}</span>
-                      </Link>
-                    </div>
-
-                    <div className="flex items-center space-x-1">
-                      <button 
-                        onClick={() => handleShare(post.id)}
-                        className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-                        title="Share"
-                      >
-                        <Share2 size={18} />
-                      </button>
-                      <Link 
-                        to={`/report/${post.id}`} 
-                        className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-full transition-colors"
-                        title="Report"
-                      >
-                        <Flag size={18} />
-                      </Link>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
+                post={post}
+                author={author}
+                currentUser={currentUser}
+                isLiked={isLiked}
+                actualIsLiked={actualIsLiked}
+                displayLikes={displayLikes}
+                onLike={handleLike}
+                onShare={handleShare}
+                isAdmin={currentUser.role === 'admin'}
+              />
             );
           })}
         </AnimatePresence>

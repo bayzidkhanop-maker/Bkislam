@@ -153,7 +153,14 @@ service cloud.firestore {
              data.content is string && data.content.size() <= 1000000 &&
              data.caption is string && data.caption.size() <= 2000 &&
              data.likes is list &&
-             data.commentsCount is number && data.commentsCount >= 0;
+             data.commentsCount is number && data.commentsCount >= 0 &&
+             (!('isEdited' in data) || data.isEdited is bool) &&
+             (!('editHistory' in data) || data.editHistory is list) &&
+             (!('visibility' in data) || data.visibility in ['public', 'friends', 'private']) &&
+             (!('isDeleted' in data) || data.isDeleted is bool) &&
+             (!('isPinned' in data) || data.isPinned is bool) &&
+             (!('isArchived' in data) || data.isArchived is bool) &&
+             (!('commentsDisabled' in data) || data.commentsDisabled is bool);
     }
 
     function isValidComment(data) {
@@ -261,7 +268,7 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read: if isAuthenticated() && request.auth.uid in resource.data.participants;
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid in resource.data.participants);
       allow create: if isAuthenticated() && 
                     hasRequiredFields(['id', 'participants', 'updatedAt', 'unreadCount', 'pinnedBy', 'archivedBy']) &&
                     isValidChat(request.resource.data) &&
@@ -276,7 +283,7 @@ service cloud.firestore {
 
     match /messages/{messageId} {
       allow read: if isAuthenticated() && 
-                  request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants;
+                  (resource == null || request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants);
       allow create: if isAuthenticated() && 
                     hasRequiredFields(['id', 'chatId', 'senderId', 'text', 'type', 'createdAt', 'status', 'deletedFor']) &&
                     isValidMessage(request.resource.data) &&
@@ -293,7 +300,7 @@ service cloud.firestore {
 
     match /calls/{callId} {
       allow read: if isAuthenticated() && 
-                  (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
+                  (resource == null || request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId);
       allow create: if isAuthenticated() && 
                     hasRequiredFields(['id', 'callerId', 'receiverId', 'status', 'type', 'startedAt']) &&
                     isValidCall(request.resource.data) &&
@@ -307,20 +314,21 @@ service cloud.firestore {
                     (request.auth.uid == resource.data.callerId || request.auth.uid == resource.data.receiverId || isAdmin());
 
       match /callerCandidates/{candidateId} {
-        allow read: if isAuthenticated() && 
-                    (request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerId || 
-                     request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.receiverId);
-        allow create: if isAuthenticated() && 
-                      request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerId;
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
       }
 
       match /receiverCandidates/{candidateId} {
-        allow read: if isAuthenticated() && 
-                    (request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.callerId || 
-                     request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.receiverId);
-        allow create: if isAuthenticated() && 
-                      request.auth.uid == get(/databases/$(database)/documents/calls/$(callId)).data.receiverId;
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
       }
+    }
+    
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Academy / Courses
@@ -346,28 +354,35 @@ service cloud.firestore {
     }
 
     match /enrollments/{enrollmentId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
       allow delete: if isAdmin();
     }
 
     match /payments/{paymentId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin() || isInstructor());
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
     match /transactions/{transactionId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /withdrawalRequests/{requestId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.userId || isAdmin());
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAdmin();
       allow delete: if isAdmin();
@@ -403,7 +418,7 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.uid;
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.uid);
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && request.auth.uid == resource.data.uid;
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.uid;

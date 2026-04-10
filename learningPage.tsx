@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getCourse, getCourseModules, getModuleLessons, getEnrollment, markLessonComplete } from './firestoreService';
 import { Course, CourseModule, Lesson, Enrollment, User } from './models';
 import { Loader, Button } from './widgets';
-import { PlayCircle, CheckCircle, Circle, ChevronLeft, ChevronDown, ChevronUp, FileText, Lock } from 'lucide-react';
+import { PlayCircle, CheckCircle, Circle, ChevronLeft, ChevronDown, ChevronUp, FileText, Lock, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -171,6 +171,45 @@ export const LearningPage = ({ currentUser }: { currentUser: User }) => {
                   ) : (
                     <p>Watch the video above to complete this lesson. You can take notes in the Notes tab.</p>
                   )}
+
+                  {((activeLesson.downloadableResources && activeLesson.downloadableResources.length > 0) || 
+                    (activeLesson.externalLinks && activeLesson.externalLinks.length > 0)) && (
+                    <div className="mt-8 pt-6 border-t border-gray-800">
+                      <h3 className="text-lg font-bold text-white mb-4">Resources</h3>
+                      
+                      {activeLesson.downloadableResources && activeLesson.downloadableResources.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Downloads</h4>
+                          <ul className="space-y-2">
+                            {activeLesson.downloadableResources.map((url, i) => (
+                              <li key={i}>
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center text-indigo-400 hover:text-indigo-300 transition-colors">
+                                  <FileText size={16} className="mr-2" />
+                                  Resource {i + 1}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {activeLesson.externalLinks && activeLesson.externalLinks.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">External Links</h4>
+                          <ul className="space-y-2">
+                            {activeLesson.externalLinks.map((url, i) => (
+                              <li key={i}>
+                                <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center text-indigo-400 hover:text-indigo-300 transition-colors">
+                                  <ExternalLink size={16} className="mr-2" />
+                                  Link {i + 1}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -221,15 +260,25 @@ export const LearningPage = ({ currentUser }: { currentUser: User }) => {
                             {lessonsByModule[module.id]?.map((lesson, lIndex) => {
                               const isCompleted = enrollment.completedLessons.includes(lesson.id);
                               const isActive = activeLesson?.id === lesson.id;
+                              const daysSinceEnrollment = Math.floor((Date.now() - enrollment.enrolledAt) / (1000 * 60 * 60 * 24));
+                              const isLocked = (lesson.dripDays || 0) > daysSinceEnrollment;
                               
                               return (
                                 <button 
                                   key={lesson.id}
-                                  className={`w-full p-3 pl-4 flex gap-3 text-left transition-colors ${isActive ? 'bg-indigo-900/30' : 'hover:bg-gray-800/50'}`}
-                                  onClick={() => setActiveLesson(lesson)}
+                                  className={`w-full p-3 pl-4 flex gap-3 text-left transition-colors ${isActive ? 'bg-indigo-900/30' : 'hover:bg-gray-800/50'} ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  onClick={() => {
+                                    if (!isLocked) {
+                                      setActiveLesson(lesson);
+                                    } else {
+                                      toast.info(`This lesson will unlock in ${(lesson.dripDays || 0) - daysSinceEnrollment} days.`);
+                                    }
+                                  }}
                                 >
                                   <div className="mt-0.5 shrink-0">
-                                    {isCompleted ? (
+                                    {isLocked ? (
+                                      <Lock size={16} className="text-gray-500" />
+                                    ) : isCompleted ? (
                                       <CheckCircle size={16} className="text-green-500" />
                                     ) : (
                                       <Circle size={16} className="text-gray-600" />
@@ -242,6 +291,7 @@ export const LearningPage = ({ currentUser }: { currentUser: User }) => {
                                     <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                                       {lesson.type === 'video' ? <PlayCircle size={12} /> : <FileText size={12} />}
                                       <span>{lesson.duration} min</span>
+                                      {isLocked && <span className="ml-2 text-amber-500">Unlocks in {(lesson.dripDays || 0) - daysSinceEnrollment} days</span>}
                                     </div>
                                   </div>
                                 </button>

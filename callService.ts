@@ -1,4 +1,4 @@
-import { doc, setDoc, onSnapshot, updateDoc, collection, addDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, collection, addDoc, getDoc, deleteDoc, query, where } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { Call } from './models';
 import { generateId } from './utils';
@@ -87,6 +87,8 @@ export const startCall = async (callerId: string, receiverId: string, type: 'aud
     if (data?.status === 'rejected' || data?.status === 'ended') {
       endCall();
     }
+  }, (error) => {
+    handleFirestoreError(error, OperationType.GET, `calls/${callId}`);
   });
 
   unsubscribeReceiverCandidates = onSnapshot(answerCandidates, (snapshot) => {
@@ -96,6 +98,8 @@ export const startCall = async (callerId: string, receiverId: string, type: 'aud
         pc?.addIceCandidate(candidate);
       }
     });
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, `calls/${callId}/receiverCandidates`);
   });
 
   return callId;
@@ -151,6 +155,8 @@ export const answerCall = async (callId: string, onRemoteStream: (stream: MediaS
         pc?.addIceCandidate(new RTCIceCandidate(data));
       }
     });
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, `calls/${callId}/callerCandidates`);
   });
   
   unsubscribeCall = onSnapshot(callDoc, (snapshot) => {
@@ -158,6 +164,8 @@ export const answerCall = async (callId: string, onRemoteStream: (stream: MediaS
     if (data?.status === 'ended') {
       endCall();
     }
+  }, (error) => {
+    handleFirestoreError(error, OperationType.GET, `calls/${callId}`);
   });
 };
 
@@ -197,16 +205,18 @@ export const endCall = async () => {
 };
 
 export const subscribeToIncomingCalls = (userId: string, callback: (call: Call | null) => void) => {
-  const callsQuery = collection(db, 'calls');
+  const callsQuery = query(collection(db, 'calls'), where('receiverId', '==', userId));
   return onSnapshot(callsQuery, (snapshot) => {
     let incomingCall: Call | null = null;
     snapshot.docs.forEach(doc => {
       const call = doc.data() as Call;
-      if (call.receiverId === userId && (call.status === 'calling' || call.status === 'ringing')) {
+      if (call.status === 'calling' || call.status === 'ringing') {
         incomingCall = call;
       }
     });
     callback(incomingCall);
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'calls');
   });
 };
 
@@ -215,6 +225,8 @@ export const subscribeToActiveCall = (callId: string, callback: (call: Call) => 
     if (doc.exists()) {
       callback(doc.data() as Call);
     }
+  }, (error) => {
+    handleFirestoreError(error, OperationType.GET, `calls/${callId}`);
   });
 };
 

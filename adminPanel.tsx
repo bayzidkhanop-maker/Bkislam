@@ -8,11 +8,12 @@ import {
   Search, Filter, MoreVertical, Edit, Ban
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getAllUsers, getReportedPosts, resolveReport, deletePost, deleteUser, getAllPendingTransactions, getAllPendingWithdrawals, approveTransaction, rejectTransaction, approveWithdrawal, rejectWithdrawal, getAllTransactions } from './firestoreService';
+import { getAllUsers, getReportedPosts, resolveReport, deletePost, deleteUser, getAllPendingTransactions, getAllPendingWithdrawals, approveTransaction, rejectTransaction, approveWithdrawal, rejectWithdrawal, getAllTransactions, updateUserRole } from './firestoreService';
 import { User, Report, Transaction, WithdrawalRequest } from './models';
 import { Card, Button, Loader, Input } from './widgets';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
+import { AdminCourseManagement } from './AdminCourseManagement';
 
 export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
   const navigate = useNavigate();
@@ -63,6 +64,19 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
     };
     fetchData();
   }, [currentUser, navigate]);
+
+  const handleRoleChange = async (uid: string, newRole: 'user' | 'admin' | 'instructor' | 'host') => {
+    setActionLoading(uid);
+    try {
+      await updateUserRole(uid, newRole);
+      setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
+      toast.success(`User role updated to ${newRole}`);
+    } catch (error) {
+      toast.error('Failed to update user role');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleDeleteUser = async (uid: string) => {
     toast('Are you sure you want to delete this user?', {
@@ -356,13 +370,22 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
                               </div>
                             </td>
                             <td className="p-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                u.role === 'admin' ? 'bg-indigo-100 text-indigo-800' : 
-                                u.role === 'host' ? 'bg-purple-100 text-purple-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {u.role}
-                              </span>
+                              <select 
+                                value={u.role}
+                                onChange={(e) => handleRoleChange(u.uid, e.target.value as any)}
+                                disabled={actionLoading === u.uid || (u.role === 'admin' && u.uid === currentUser.uid)}
+                                className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-indigo-500 ${
+                                  u.role === 'admin' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' : 
+                                  u.role === 'instructor' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                  u.role === 'host' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
+                                }`}
+                              >
+                                <option value="user">User</option>
+                                <option value="instructor">Instructor</option>
+                                <option value="host">Host</option>
+                                <option value="admin">Admin</option>
+                              </select>
                             </td>
                             <td className="p-4 text-gray-500 text-sm">
                               {formatDistanceToNow(u.createdAt, { addSuffix: true })}
@@ -509,7 +532,11 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
             )}
 
             {/* Placeholders for other tabs */}
-            {(activeTab === 'courses' || activeTab === 'tournaments' || activeTab === 'reports') && (
+            {activeTab === 'courses' && (
+              <AdminCourseManagement currentUser={currentUser} />
+            )}
+
+            {(activeTab === 'tournaments' || activeTab === 'reports') && (
               <div className="text-center py-20">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mb-4">
                   <Settings size={32} />

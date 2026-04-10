@@ -522,6 +522,11 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                         <Link to="/courses" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors">
                           <BookOpen size={16} /> My Courses
                         </Link>
+                        {(user.role === 'admin' || user.role === 'teacher') && (
+                          <Link to="/course-dashboard" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors">
+                            <BookOpen size={16} /> Course Dashboard
+                          </Link>
+                        )}
                         <Link to="/wallet" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors">
                           <Wallet size={16} /> Wallet & Payments
                         </Link>

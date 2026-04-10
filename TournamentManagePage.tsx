@@ -62,21 +62,29 @@ export const TournamentManagePage = ({ currentUser }: { currentUser: User }) => 
         setStatus(tData.status);
         setIsPublished(tData.isPublished);
       }
+    }, (error) => {
+      console.error("Error listening to tournament:", error);
     });
 
     const registrationsQuery = query(collection(db, 'tournamentRegistrations'), where('tournamentId', '==', id));
     const unsubscribeRegistrations = onSnapshot(registrationsQuery, (snapshot) => {
       setRegistrations(snapshot.docs.map(doc => doc.data() as TournamentRegistration));
+    }, (error) => {
+      console.error("Error listening to registrations:", error);
     });
 
     const matchesQuery = query(collection(db, 'tournamentMatches'), where('tournamentId', '==', id), orderBy('round', 'asc'));
     const unsubscribeMatches = onSnapshot(matchesQuery, (snapshot) => {
       setMatches(snapshot.docs.map(doc => doc.data() as TournamentMatch));
+    }, (error) => {
+      console.error("Error listening to matches:", error);
     });
 
     const resultsQuery = query(collection(db, 'matchResults'), where('tournamentId', '==', id));
     const unsubscribeResults = onSnapshot(resultsQuery, (snapshot) => {
       setResults(snapshot.docs.map(doc => doc.data() as MatchResult));
+    }, (error) => {
+      console.error("Error listening to results:", error);
     });
 
     return () => {

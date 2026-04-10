@@ -150,6 +150,13 @@ export interface Post {
   likes: string[]; // array of uids
   commentsCount: number;
   createdAt: number;
+  isEdited?: boolean;
+  editHistory?: { timestamp: number; content: string; caption: string }[];
+  visibility?: 'public' | 'friends' | 'private';
+  isDeleted?: boolean; // soft delete
+  isPinned?: boolean;
+  isArchived?: boolean;
+  commentsDisabled?: boolean;
 }
 
 export interface Comment {
@@ -226,22 +233,44 @@ export interface Notification {
 
 // --- ACADEMY / COURSE SYSTEM MODELS ---
 
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: number;
+}
+
 export interface Course {
   id: string;
   title: string;
+  subtitle?: string;
   description: string;
   instructorId: string;
   instructorName: string;
   price: number;
+  discountPrice?: number;
   thumbnailURL: string;
+  promoVideoURL?: string;
+  category?: string;
+  subcategory?: string;
   tags: string[];
   level: 'Beginner' | 'Intermediate' | 'Advanced' | 'All Levels';
   language: string;
   rating: number;
   totalReviews: number;
   studentsCount: number;
-  published: boolean;
+  status: 'draft' | 'pending' | 'published' | 'archived';
+  version?: number;
+  isFeatured?: boolean;
+  requirements?: string[];
+  whatYouWillLearn?: string[];
+  targetAudience?: string[];
+  estimatedDuration?: string;
+  certificateEnabled?: boolean;
+  lifetimeAccess?: boolean;
+  dripContentEnabled?: boolean;
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface CourseModule {
@@ -263,6 +292,9 @@ export interface Lesson {
   duration: number; // in minutes
   isFreePreview: boolean;
   order: number;
+  downloadableResources?: string[];
+  externalLinks?: string[];
+  dripDays?: number; // Days after enrollment to unlock
 }
 
 export interface Enrollment {
@@ -272,7 +304,21 @@ export interface Enrollment {
   progress: number;
   completedLessons: string[]; // array of lesson IDs
   status: 'pending' | 'active' | 'completed';
+  certificateIssued?: boolean;
+  certificateUrl?: string;
   enrolledAt: number;
+}
+
+export interface Review {
+  id: string;
+  courseId: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  rating: number; // 1-5
+  comment: string;
+  teacherReply?: string;
+  createdAt: number;
 }
 
 export interface Payment {

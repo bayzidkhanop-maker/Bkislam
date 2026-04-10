@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getCourse, getCourseModules, getModuleLessons, getEnrollment, enrollInCourse, purchaseCourseWithWallet } from './firestoreService';
-import { Course, CourseModule, Lesson, Enrollment, User } from './models';
+import { getCourse, getCourseModules, getModuleLessons, getEnrollment, enrollInCourse, purchaseCourseWithWallet, getCourseReviews, createReview } from './firestoreService';
+import { Course, CourseModule, Lesson, Enrollment, User, Review } from './models';
 import { Card, Loader, Button, Input } from './widgets';
 import { Star, Clock, BookOpen, PlayCircle, CheckCircle, Users, Globe, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -15,12 +15,16 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
   const [modules, setModules] = useState<CourseModule[]>([]);
   const [lessonsByModule, setLessonsByModule] = useState<Record<string, Lesson[]>>({});
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bKash' | 'Nagad' | 'Wallet'>('Wallet');
   const [transactionId, setTransactionId] = useState('');
   const [enrolling, setEnrolling] = useState(false);
+  const [newReviewRating, setNewReviewRating] = useState(5);
+  const [newReviewComment, setNewReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     const fetchCourseData = async () => {
@@ -39,6 +43,9 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
             lessonsMap[mod.id] = lessons;
           }
           setLessonsByModule(lessonsMap);
+
+          const fetchedReviews = await getCourseReviews(courseId);
+          setReviews(fetchedReviews);
 
           if (currentUser) {
             const fetchedEnrollment = await getEnrollment(currentUser.uid, courseId);
@@ -128,6 +135,35 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
     }
   };
 
+  const handleSubmitReview = async () => {
+    if (!currentUser || !course) {
+      toast.error("Please log in to submit a review.");
+      return;
+    }
+    if (!newReviewComment.trim()) {
+      toast.error("Please write a comment.");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const review = await createReview({
+        courseId: course.id,
+        userId: currentUser.uid,
+        userName: currentUser.displayName || 'Anonymous',
+        rating: newReviewRating,
+        comment: newReviewComment
+      });
+      setReviews([review, ...reviews]);
+      setNewReviewComment('');
+      setNewReviewRating(5);
+      toast.success("Review submitted successfully!");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to submit review.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><Loader /></div>;
   if (!course) return <div className="text-center py-20 text-gray-500">Course not found.</div>;
 
@@ -146,6 +182,7 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
               ))}
             </div>
             <h1 className="text-3xl sm:text-4xl font-extrabold mb-4 leading-tight">{course.title}</h1>
+            {course.subtitle && <p className="text-xl text-gray-200 mb-4 font-medium">{course.subtitle}</p>}
             <p className="text-lg text-gray-300 mb-6">{course.description}</p>
             
             <div className="flex flex-wrap items-center gap-4 text-sm mb-6">
@@ -172,6 +209,18 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
           <div className="lg:col-span-2">
+            <Card className="p-6 sm:p-8 mb-8 shadow-sm">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6">What you'll learn</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {(course.whatYouWillLearn || ['Master the core concepts', 'Build real-world projects', 'Apply best practices', 'Prepare for certification']).map((item, index) => (
+                  <div key={index} className="flex items-start gap-3">
+                    <CheckCircle size={20} className="text-green-500 shrink-0 mt-0.5" />
+                    <span className="text-gray-700 text-sm">{item}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
             <Card className="p-6 sm:p-8 mb-8 shadow-sm">
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Course Content</h2>
               <div className="flex justify-between items-center text-sm text-gray-500 mb-4">
@@ -231,13 +280,93 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
                 ))}
               </div>
             </Card>
+
+            <Card className="p-6 sm:p-8 mb-8 shadow-sm">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Requirements</h2>
+              <ul className="list-disc pl-5 space-y-2 text-gray-700">
+                {(course.requirements || ['No prior experience required', 'Basic understanding of the subject matter']).map((req, index) => (
+                  <li key={index}>{req}</li>
+                ))}
+              </ul>
+            </Card>
+
+            <Card className="p-6 sm:p-8 mb-8 shadow-sm">
+              <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                <Star className="text-amber-400" fill="currentColor" size={24} />
+                Course Reviews
+              </h2>
+              
+              {/* Add Review Form */}
+              {enrollment && enrollment.status === 'active' && (
+                <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                  <h3 className="font-bold text-gray-900 mb-3">Leave a Review</h3>
+                  <div className="flex items-center gap-2 mb-3">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star 
+                        key={star} 
+                        size={24} 
+                        className={`cursor-pointer ${star <= newReviewRating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`}
+                        onClick={() => setNewReviewRating(star)}
+                      />
+                    ))}
+                  </div>
+                  <textarea 
+                    className="w-full p-3 border border-gray-200 rounded-lg mb-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"
+                    rows={3}
+                    placeholder="Share your experience with this course..."
+                    value={newReviewComment}
+                    onChange={(e) => setNewReviewComment(e.target.value)}
+                  />
+                  <Button onClick={handleSubmitReview} disabled={submittingReview}>
+                    {submittingReview ? 'Submitting...' : 'Submit Review'}
+                  </Button>
+                </div>
+              )}
+
+              {/* Reviews List */}
+              <div className="space-y-6">
+                {reviews.length > 0 ? (
+                  reviews.map((review) => (
+                    <div key={review.id} className="border-b border-gray-100 pb-6 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 font-bold">
+                            {review.userName.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="font-bold text-gray-900">{review.userName}</p>
+                            <div className="flex items-center text-amber-400">
+                              {[...Array(5)].map((_, i) => (
+                                <Star key={i} size={14} className={i < review.rating ? 'fill-amber-400' : 'text-gray-300'} />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <span className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <p className="text-gray-700 mt-3">{review.comment}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    No reviews yet. Be the first to review this course!
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
 
           {/* Floating Sidebar */}
           <div className="lg:col-span-1">
             <div className="sticky top-24">
               <Card className="overflow-hidden shadow-xl border-0 ring-1 ring-gray-200">
-                <div className="relative aspect-video group cursor-pointer">
+                <div className="relative aspect-video group cursor-pointer" onClick={() => {
+                  if (course.promoVideoURL) {
+                    window.open(course.promoVideoURL, '_blank');
+                  } else {
+                    toast.info("No promo video available.");
+                  }
+                }}>
                   <img src={course.thumbnailURL} alt={course.title} className="w-full h-full object-cover" />
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <PlayCircle size={64} className="text-white" />

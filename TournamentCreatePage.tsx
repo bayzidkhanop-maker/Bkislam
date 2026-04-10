@@ -4,6 +4,7 @@ import { Trophy, Save, Image as ImageIcon } from 'lucide-react';
 import { createTournament } from './firestoreService';
 import { User } from './models';
 import { toast } from 'sonner';
+import { Button } from './widgets';
 
 export const TournamentCreatePage = ({ currentUser }: { currentUser: User }) => {
   const navigate = useNavigate();
@@ -197,20 +198,21 @@ export const TournamentCreatePage = ({ currentUser }: { currentUser: User }) => 
           </div>
 
           <div className="pt-4 flex justify-end gap-4 border-t border-gray-700">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => navigate('/tournaments')}
-              className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+              className="px-6 py-2.5"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+              isLoading={isSubmitting}
+              className="px-6 py-2.5 flex items-center gap-2"
             >
-              {isSubmitting ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <><Save size={18} /> Create Tournament</>}
-            </button>
+              <Save size={18} /> Create Tournament
+            </Button>
           </div>
         </form>
       </div>

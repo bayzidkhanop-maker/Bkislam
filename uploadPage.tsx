@@ -182,13 +182,14 @@ export const UploadPage = ({ currentUser }: { currentUser: User }) => {
             </div>
           )}
 
-          <div className="pt-4 border-t border-gray-100">
+          <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
             <Button 
               type="submit" 
-              disabled={uploading || (type !== 'text' && !file) || (type === 'text' && !content.trim())} 
+              disabled={(type !== 'text' && !file) || (type === 'text' && !content.trim())} 
+              isLoading={uploading}
               className="w-full py-3 text-base"
             >
-              {uploading ? 'Publishing...' : 'Publish Post'}
+              Publish Post
             </Button>
           </div>
         </form>

@@ -17,7 +17,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult, Notification, Chat, Message, Call } from './models';
+import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult, Notification, Chat, Message, Call, Review, Category } from './models';
 import { generateId } from './utils';
 import { handleFirestoreError, OperationType } from './firestoreErrorHandler';
 
@@ -51,11 +51,14 @@ export const getFeedPosts = async (limitCount: number = 10): Promise<Post[]> => 
   }
 };
 
-export const getUserPosts = async (uid: string): Promise<Post[]> => {
+export const getUserPosts = async (uid: string, includeArchived = false): Promise<Post[]> => {
   try {
     const q = query(collection(db, 'posts'), where('uid', '==', uid));
     const snapshot = await getDocs(q);
-    const posts = snapshot.docs.map(doc => doc.data() as Post);
+    let posts = snapshot.docs.map(doc => doc.data() as Post).filter(p => !p.isDeleted);
+    if (!includeArchived) {
+      posts = posts.filter(p => !p.isArchived);
+    }
     return posts.sort((a, b) => b.createdAt - a.createdAt);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'posts');
@@ -125,6 +128,27 @@ export const getAllUsers = async (): Promise<User[]> => {
   }
 };
 
+export const getUserProfile = async (userId: string): Promise<User | null> => {
+  try {
+    const docRef = doc(db, 'users', userId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as User;
+    }
+    return null;
+  } catch (error) {
+    try { handleFirestoreError(error, OperationType.GET, `users/${userId}`); } catch (e) {}
+    return {
+      uid: userId,
+      name: 'Unknown User',
+      email: '',
+      role: 'user',
+      createdAt: Date.now(),
+      avatarURL: `https://ui-avatars.com/api/?name=Unknown&background=random`
+    } as User;
+  }
+};
+
 export const getReportedPosts = async (): Promise<Report[]> => {
   try {
     const q = query(collection(db, 'reports'), where('status', '==', 'pending'));
@@ -153,6 +177,63 @@ export const deletePost = async (postId: string): Promise<void> => {
   }
 };
 
+export const updatePost = async (postId: string, data: Partial<Post>): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'posts', postId), {
+      ...data,
+      isEdited: true,
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    throw error;
+  }
+};
+
+export const softDeletePost = async (postId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'posts', postId), { isDeleted: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    throw error;
+  }
+};
+
+export const restorePost = async (postId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'posts', postId), { isDeleted: false });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    throw error;
+  }
+};
+
+export const togglePinPost = async (postId: string, isPinned: boolean): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'posts', postId), { isPinned });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    throw error;
+  }
+};
+
+export const toggleArchivePost = async (postId: string, isArchived: boolean): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'posts', postId), { isArchived });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    throw error;
+  }
+};
+
+export const toggleComments = async (postId: string, commentsDisabled: boolean): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'posts', postId), { commentsDisabled });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `posts/${postId}`);
+    throw error;
+  }
+};
+
 export const deleteUser = async (uid: string): Promise<void> => {
   try {
     await deleteDoc(doc(db, 'users', uid));
@@ -161,10 +242,20 @@ export const deleteUser = async (uid: string): Promise<void> => {
   }
 };
 
+export const updateUserRole = async (uid: string, role: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'users', uid), { role });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
+    throw error;
+  }
+};
+
 export const subscribeToFeed = (callback: (posts: Post[]) => void) => {
   const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50));
   return onSnapshot(q, (snapshot) => {
-    callback(snapshot.docs.map(doc => doc.data() as Post));
+    const posts = snapshot.docs.map(doc => doc.data() as Post).filter(p => !p.isDeleted && !p.isArchived);
+    callback(posts);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'posts');
   });
@@ -185,8 +276,15 @@ export const getUser = async (uid: string): Promise<User | null> => {
     const userDoc = await getDoc(doc(db, 'users', uid));
     return userDoc.exists() ? (userDoc.data() as User) : null;
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, `users/${uid}`);
-    throw error;
+    try { handleFirestoreError(error, OperationType.GET, `users/${uid}`); } catch (e) {}
+    return {
+      uid,
+      name: 'Unknown User',
+      email: '',
+      role: 'user',
+      createdAt: Date.now(),
+      avatarURL: `https://ui-avatars.com/api/?name=Unknown&background=random`
+    } as User;
   }
 };
 
@@ -365,23 +463,23 @@ export const requestWithdrawal = async (
         updatedAt: Date.now()
       };
 
-      const withdrawalRef = doc(db, 'withdrawals', id);
+      const withdrawalRef = doc(db, 'withdrawalRequests', id);
       transaction.set(withdrawalRef, withdrawal);
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, 'withdrawals');
+    handleFirestoreError(error, OperationType.WRITE, 'withdrawalRequests');
     throw error;
   }
 };
 
 export const getUserWithdrawals = async (userId: string): Promise<WithdrawalRequest[]> => {
   try {
-    const q = query(collection(db, 'withdrawals'), where('userId', '==', userId));
+    const q = query(collection(db, 'withdrawalRequests'), where('userId', '==', userId));
     const snapshot = await getDocs(q);
     const withdrawals = snapshot.docs.map(doc => doc.data() as WithdrawalRequest);
     return withdrawals.sort((a, b) => b.createdAt - a.createdAt);
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'withdrawals');
+    handleFirestoreError(error, OperationType.LIST, 'withdrawalRequests');
     throw error;
   }
 };
@@ -544,12 +642,12 @@ export const rejectTransaction = async (transactionId: string, adminNote: string
 
 export const getAllPendingWithdrawals = async (): Promise<WithdrawalRequest[]> => {
   try {
-    const q = query(collection(db, 'withdrawals'), where('status', '==', 'pending'));
+    const q = query(collection(db, 'withdrawalRequests'), where('status', '==', 'pending'));
     const snapshot = await getDocs(q);
     const withdrawals = snapshot.docs.map(doc => doc.data() as WithdrawalRequest);
     return withdrawals.sort((a, b) => b.createdAt - a.createdAt);
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'withdrawals');
+    handleFirestoreError(error, OperationType.LIST, 'withdrawalRequests');
     throw error;
   }
 };
@@ -557,7 +655,7 @@ export const getAllPendingWithdrawals = async (): Promise<WithdrawalRequest[]> =
 export const approveWithdrawal = async (withdrawalId: string, userId: string, amount: number): Promise<void> => {
   try {
     await runTransaction(db, async (tx) => {
-      const wRef = doc(db, 'withdrawals', withdrawalId);
+      const wRef = doc(db, 'withdrawalRequests', withdrawalId);
       const userRef = doc(db, 'users', userId);
       
       const wDoc = await tx.get(wRef);
@@ -579,7 +677,7 @@ export const approveWithdrawal = async (withdrawalId: string, userId: string, am
       });
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `withdrawals/${withdrawalId}`);
+    handleFirestoreError(error, OperationType.UPDATE, `withdrawalRequests/${withdrawalId}`);
     throw error;
   }
 };
@@ -587,7 +685,7 @@ export const approveWithdrawal = async (withdrawalId: string, userId: string, am
 export const rejectWithdrawal = async (withdrawalId: string, adminNote: string): Promise<void> => {
   try {
     await runTransaction(db, async (tx) => {
-      const wRef = doc(db, 'withdrawals', withdrawalId);
+      const wRef = doc(db, 'withdrawalRequests', withdrawalId);
       const wDoc = await tx.get(wRef);
       
       if (!wDoc.exists() || wDoc.data().status !== 'pending') {
@@ -614,19 +712,105 @@ export const rejectWithdrawal = async (withdrawalId: string, adminNote: string):
       });
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `withdrawals/${withdrawalId}`);
+    handleFirestoreError(error, OperationType.UPDATE, `withdrawalRequests/${withdrawalId}`);
+    throw error;
+  }
+};
+
+export const getCategories = async (): Promise<Category[]> => {
+  try {
+    const q = query(collection(db, 'categories'), orderBy('name', 'asc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Category);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'categories');
+    throw error;
+  }
+};
+
+export const createCategory = async (name: string, description?: string): Promise<Category> => {
+  const id = generateId();
+  const newCategory: Category = {
+    id,
+    name,
+    description,
+    createdAt: Date.now()
+  };
+  try {
+    await setDoc(doc(db, 'categories', id), newCategory);
+    return newCategory;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `categories/${id}`);
+    throw error;
+  }
+};
+
+export const deleteCategory = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'categories', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `categories/${id}`);
     throw error;
   }
 };
 
 export const getCourses = async (): Promise<Course[]> => {
   try {
-    const q = query(collection(db, 'courses'), where('published', '==', true));
+    const q = query(collection(db, 'courses'));
     const snapshot = await getDocs(q);
     const courses = snapshot.docs.map(doc => doc.data() as Course);
     return courses.sort((a, b) => b.createdAt - a.createdAt);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'courses');
+    throw error;
+  }
+};
+
+export const getInstructorCourses = async (instructorId: string): Promise<Course[]> => {
+  try {
+    const q = query(collection(db, 'courses'), where('instructorId', '==', instructorId));
+    const snapshot = await getDocs(q);
+    const courses = snapshot.docs.map(doc => doc.data() as Course);
+    return courses.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'courses');
+    throw error;
+  }
+};
+
+export const createCourse = async (courseData: Omit<Course, 'id' | 'createdAt'>): Promise<Course> => {
+  const id = generateId();
+  const newCourse: Course = {
+    ...courseData,
+    id,
+    createdAt: Date.now(),
+  };
+  try {
+    await setDoc(doc(db, 'courses', id), newCourse);
+    return newCourse;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `courses/${id}`);
+    throw error;
+  }
+};
+
+export const updateCourse = async (courseId: string, updates: Partial<Course>): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'courses', courseId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `courses/${courseId}`);
+    throw error;
+  }
+};
+
+export const deleteCourse = async (courseId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'courses', courseId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `courses/${courseId}`);
     throw error;
   }
 };
@@ -665,6 +849,66 @@ export const getModuleLessons = async (moduleId: string): Promise<Lesson[]> => {
   }
 };
 
+export const createCourseModule = async (moduleData: Omit<CourseModule, 'id'>): Promise<CourseModule> => {
+  const id = generateId();
+  const newModule: CourseModule = { ...moduleData, id };
+  try {
+    await setDoc(doc(db, 'courseModules', id), newModule);
+    return newModule;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `courseModules/${id}`);
+    throw error;
+  }
+};
+
+export const updateCourseModule = async (moduleId: string, updates: Partial<CourseModule>): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'courseModules', moduleId), updates);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `courseModules/${moduleId}`);
+    throw error;
+  }
+};
+
+export const deleteCourseModule = async (moduleId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'courseModules', moduleId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `courseModules/${moduleId}`);
+    throw error;
+  }
+};
+
+export const createLesson = async (lessonData: Omit<Lesson, 'id'>): Promise<Lesson> => {
+  const id = generateId();
+  const newLesson: Lesson = { ...lessonData, id };
+  try {
+    await setDoc(doc(db, 'lessons', id), newLesson);
+    return newLesson;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `lessons/${id}`);
+    throw error;
+  }
+};
+
+export const updateLesson = async (lessonId: string, updates: Partial<Lesson>): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'lessons', lessonId), updates);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `lessons/${lessonId}`);
+    throw error;
+  }
+};
+
+export const deleteLesson = async (lessonId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'lessons', lessonId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `lessons/${lessonId}`);
+    throw error;
+  }
+};
+
 export const getEnrollment = async (userId: string, courseId: string): Promise<Enrollment | null> => {
   try {
     const q = query(collection(db, 'enrollments'), where('userId', '==', userId), where('courseId', '==', courseId));
@@ -673,6 +917,38 @@ export const getEnrollment = async (userId: string, courseId: string): Promise<E
     return snapshot.docs[0].data() as Enrollment;
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'enrollments');
+    throw error;
+  }
+};
+
+export const getCourseEnrollments = async (courseId: string): Promise<Enrollment[]> => {
+  try {
+    const q = query(collection(db, 'enrollments'), where('courseId', '==', courseId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Enrollment);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'enrollments');
+    throw error;
+  }
+};
+
+export const removeStudentFromCourse = async (enrollmentId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'enrollments', enrollmentId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `enrollments/${enrollmentId}`);
+    throw error;
+  }
+};
+
+export const issueCertificate = async (enrollmentId: string, certificateUrl: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'enrollments', enrollmentId), {
+      certificateIssued: true,
+      certificateUrl
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `enrollments/${enrollmentId}`);
     throw error;
   }
 };
@@ -833,6 +1109,17 @@ export const getTournaments = async (statusFilter?: string): Promise<Tournament[
     if (statusFilter) {
       q = query(collection(db, 'tournaments'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
     }
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Tournament);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'tournaments');
+    throw error;
+  }
+};
+
+export const getHostTournaments = async (hostId: string): Promise<Tournament[]> => {
+  try {
+    const q = query(collection(db, 'tournaments'), where('hostId', '==', hostId), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => doc.data() as Tournament);
   } catch (error) {
@@ -1030,9 +1317,11 @@ export const createOrGetChat = async (userId1: string, userId2: string): Promise
 };
 
 export const subscribeToChats = (userId: string, callback: (chats: Chat[]) => void) => {
-  const q = query(collection(db, 'chats'), where('participants', 'array-contains', userId), orderBy('updatedAt', 'desc'));
+  const q = query(collection(db, 'chats'), where('participants', 'array-contains', userId));
   return onSnapshot(q, (snapshot) => {
     const chats = snapshot.docs.map(doc => doc.data() as Chat);
+    // Sort client-side to avoid requiring a composite index
+    chats.sort((a, b) => b.updatedAt - a.updatedAt);
     callback(chats);
   }, (error) => {
     handleFirestoreError(error, OperationType.LIST, 'chats');
@@ -1150,4 +1439,39 @@ export const toggleArchiveChat = async (chatId: string, userId: string, isArchiv
   }
 };
 
+// --- Reviews ---
+export const getCourseReviews = async (courseId: string): Promise<Review[]> => {
+  try {
+    const q = query(collection(db, 'reviews'), where('courseId', '==', courseId), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Review);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'reviews');
+    throw error;
+  }
+};
 
+export const deleteReview = async (reviewId: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'reviews', reviewId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `reviews/${reviewId}`);
+    throw error;
+  }
+};
+
+export const createReview = async (reviewData: Omit<Review, 'id' | 'createdAt'>): Promise<Review> => {
+  const id = generateId();
+  const newReview: Review = {
+    ...reviewData,
+    id,
+    createdAt: Date.now(),
+  };
+  try {
+    await setDoc(doc(db, 'reviews', id), newReview);
+    return newReview;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `reviews/${id}`);
+    throw error;
+  }
+};

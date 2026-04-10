@@ -21,6 +21,8 @@ import { ReportPage } from './reportPage';
 import { CoursesPage } from './coursesPage';
 import { CourseDetailsPage } from './courseDetailsPage';
 import { LearningPage } from './learningPage';
+import { CourseDashboardPage } from './courseDashboardPage';
+import { CourseBuilderPage } from './courseBuilderPage';
 import { WalletPage } from './walletPage';
 
 import { TournamentsPage } from './TournamentsPage';
@@ -103,6 +105,8 @@ export const App = () => {
             <Route path="courses" element={<CoursesPage currentUser={user} />} />
             <Route path="course/:courseId" element={<CourseDetailsPage currentUser={user} />} />
             <Route path="learn/:courseId" element={<LearningPage currentUser={user} />} />
+            <Route path="course-dashboard" element={<CourseDashboardPage currentUser={user} />} />
+            <Route path="course-builder/:courseId" element={<CourseBuilderPage currentUser={user} />} />
             <Route path="wallet" element={<WalletPage currentUser={user} />} />
             <Route path="tournaments" element={<TournamentsPage currentUser={user} />} />
             <Route path="tournaments/create" element={<TournamentCreatePage currentUser={user} />} />

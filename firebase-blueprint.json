@@ -260,21 +260,31 @@
       "properties": {
         "id": { "type": "string" },
         "title": { "type": "string" },
+        "subtitle": { "type": "string" },
         "description": { "type": "string" },
         "instructorId": { "type": "string" },
         "instructorName": { "type": "string" },
         "price": { "type": "number" },
+        "discountPrice": { "type": "number" },
         "thumbnailURL": { "type": "string" },
+        "promoVideoURL": { "type": "string" },
+        "category": { "type": "string" },
+        "subcategory": { "type": "string" },
         "tags": { "type": "array", "items": { "type": "string" } },
         "level": { "type": "string", "enum": ["Beginner", "Intermediate", "Advanced", "All Levels"] },
         "language": { "type": "string" },
         "rating": { "type": "number" },
         "totalReviews": { "type": "number" },
         "studentsCount": { "type": "number" },
-        "published": { "type": "boolean" },
-        "createdAt": { "type": "number" }
+        "status": { "type": "string", "enum": ["draft", "published", "archived"] },
+        "version": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "requirements": { "type": "array", "items": { "type": "string" } },
+        "whatYouWillLearn": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
       },
-      "required": ["id", "title", "description", "instructorId", "instructorName", "price", "thumbnailURL", "tags", "level", "language", "rating", "totalReviews", "studentsCount", "published", "createdAt"]
+      "required": ["id", "title", "description", "instructorId", "instructorName", "price", "thumbnailURL", "tags", "level", "language", "rating", "totalReviews", "studentsCount", "status", "createdAt"]
     },
     "CourseModule": {
       "title": "CourseModule",
@@ -303,7 +313,10 @@
         "content": { "type": "string" },
         "duration": { "type": "number" },
         "isFreePreview": { "type": "boolean" },
-        "order": { "type": "number" }
+        "order": { "type": "number" },
+        "downloadableResources": { "type": "array", "items": { "type": "string" } },
+        "externalLinks": { "type": "array", "items": { "type": "string" } },
+        "dripDays": { "type": "number" }
       },
       "required": ["id", "moduleId", "courseId", "instructorId", "title", "type", "content", "duration", "isFreePreview", "order"]
     },
@@ -318,9 +331,28 @@
         "progress": { "type": "number" },
         "completedLessons": { "type": "array", "items": { "type": "string" } },
         "status": { "type": "string", "enum": ["pending", "active", "completed"] },
+        "certificateIssued": { "type": "boolean" },
+        "certificateUrl": { "type": "string" },
         "enrolledAt": { "type": "number" }
       },
       "required": ["id", "userId", "courseId", "progress", "completedLessons", "status", "enrolledAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Course review by a student",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userAvatar": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "teacherReply": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "courseId", "userId", "userName", "rating", "comment", "createdAt"]
     },
     "Payment": {
       "title": "Payment",
@@ -375,6 +407,10 @@
     "/payments/{paymentId}": {
       "schema": { "$ref": "Payment" },
       "description": "Payments for courses"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "Review" },
+      "description": "Reviews for courses"
     },
     "/transactions/{transactionId}": {
       "schema": { "$ref": "Transaction" },

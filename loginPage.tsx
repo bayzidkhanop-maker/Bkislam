@@ -128,8 +128,8 @@ export const LoginPage = () => {
               </div>
             </div>
 
-            <Button type="submit" className="w-full py-2.5 text-base" disabled={loading}>
-              {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Sign Up')}
+            <Button type="submit" className="w-full py-2.5 text-base" isLoading={loading}>
+              {isLogin ? 'Sign In' : 'Sign Up'}
             </Button>
           </form>
 
@@ -148,7 +148,7 @@ export const LoginPage = () => {
                 variant="outline" 
                 type="button" 
                 onClick={handleGoogleLogin} 
-                disabled={loading}
+                isLoading={loading}
                 className="w-full flex items-center justify-center gap-2 py-2.5"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">

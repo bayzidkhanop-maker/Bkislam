@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getUser, getUserPosts, updateUser, followUser, unfollowUser } from './firestoreService';
+import { getUser, getUserPosts, updateUser, followUser, unfollowUser, getInstructorCourses, getHostTournaments } from './firestoreService';
 import { startCall } from './callService';
-import { User, Post } from './models';
+import { User, Post, Course, Tournament } from './models';
 import { Card, Button, Input, Loader, MediaRenderer } from './widgets';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -10,7 +10,7 @@ import {
   User as UserIcon, Gamepad2, GraduationCap, Wallet, Shield, Settings,
   CheckCircle2, MapPin, Globe, Facebook, Youtube, Twitch, Trophy, Target,
   Crosshair, Medal, CreditCard, History, Bell, Moon, Sun, Lock, Smartphone,
-  LogOut, Trash2, Camera, UploadCloud, Share2, Phone
+  LogOut, Trash2, Camera, UploadCloud, Share2, Phone, Archive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -60,7 +60,7 @@ export const ProfilePage = () => {
       const fetchedUser = await getUser(uid);
       if (fetchedUser) {
         setUser(fetchedUser);
-        const fetchedPosts = await getUserPosts(uid);
+        const fetchedPosts = await getUserPosts(uid, isOwnProfile);
         setPosts(fetchedPosts);
       }
       setLoading(false);
@@ -439,10 +439,17 @@ const PostsTab = ({ posts }: { posts: Post[] }) => (
               </div>
             )}
             
-            <div className="absolute top-3 right-3 p-1.5 bg-black/40 backdrop-blur-md rounded-lg text-white">
-              {post.type === 'image' && <ImageIcon size={16} />}
-              {post.type === 'video' && <Video size={16} />}
-              {post.type === 'text' && <Type size={16} />}
+            <div className="absolute top-3 right-3 flex gap-2">
+              {post.isArchived && (
+                <div className="p-1.5 bg-yellow-500/80 backdrop-blur-md rounded-lg text-white">
+                  <Archive size={16} />
+                </div>
+              )}
+              <div className="p-1.5 bg-black/40 backdrop-blur-md rounded-lg text-white">
+                {post.type === 'image' && <ImageIcon size={16} />}
+                {post.type === 'video' && <Video size={16} />}
+                {post.type === 'text' && <Type size={16} />}
+              </div>
             </div>
 
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-6 text-white">
@@ -488,8 +495,15 @@ const MediaTab = ({ posts }: { posts: Post[] }) => {
             >
               {post.type === 'image' && <MediaRenderer url={post.content} type="image" className="w-full h-full object-cover" />}
               {post.type === 'video' && <MediaRenderer url={post.content} type="video" className="w-full h-full object-cover" />}
-              <div className="absolute top-2 right-2 p-1 bg-black/40 backdrop-blur-md rounded text-white">
-                {post.type === 'video' ? <Video size={14} /> : <ImageIcon size={14} />}
+              <div className="absolute top-2 right-2 flex gap-1">
+                {post.isArchived && (
+                  <div className="p-1 bg-yellow-500/80 backdrop-blur-md rounded text-white">
+                    <Archive size={14} />
+                  </div>
+                )}
+                <div className="p-1 bg-black/40 backdrop-blur-md rounded text-white">
+                  {post.type === 'video' ? <Video size={14} /> : <ImageIcon size={14} />}
+                </div>
               </div>
             </Link>
           ))}
@@ -499,35 +513,125 @@ const MediaTab = ({ posts }: { posts: Post[] }) => {
   );
 };
 
-const CoursesTab = ({ user }: { user: User }) => (
-  <div className="space-y-6">
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="text-xl font-bold text-gray-900">Published Courses</h2>
-    </div>
-    <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
-      <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
-        <GraduationCap size={32} />
-      </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-1">Courses coming soon</h3>
-      <p className="text-gray-500">This instructor's courses will appear here.</p>
-    </div>
-  </div>
-);
+const CoursesTab = ({ user }: { user: User }) => {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
 
-const TournamentsTab = ({ user }: { user: User }) => (
-  <div className="space-y-6">
-    <div className="flex items-center justify-between mb-6">
-      <h2 className="text-xl font-bold text-gray-900">Hosted Tournaments</h2>
-    </div>
-    <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
-      <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
-        <Trophy size={32} />
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const fetchedCourses = await getInstructorCourses(user.uid);
+        setCourses(fetchedCourses);
+      } catch (error) {
+        console.error("Failed to fetch courses", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCourses();
+  }, [user.uid]);
+
+  if (loading) return <div className="flex justify-center py-10"><Loader /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-900">Published Courses</h2>
       </div>
-      <h3 className="text-lg font-medium text-gray-900 mb-1">Tournaments coming soon</h3>
-      <p className="text-gray-500">This host's tournaments will appear here.</p>
+      {courses.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {courses.map(course => (
+            <Link key={course.id} to={`/courses/${course.id}`}>
+              <Card className="overflow-hidden hover:shadow-xl transition-shadow h-full flex flex-col">
+                <div className="aspect-video relative">
+                  <img src={course.thumbnailURL} alt={course.title} className="w-full h-full object-cover" />
+                  <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-bold">
+                    {course.price === 0 ? 'Free' : `৳ ${course.price}`}
+                  </div>
+                </div>
+                <div className="p-4 flex-1 flex flex-col">
+                  <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{course.title}</h3>
+                  <div className="mt-auto flex items-center justify-between text-sm text-gray-500">
+                    <span className="flex items-center gap-1"><Users size={14} /> {course.studentCount || 0}</span>
+                    <span className="flex items-center gap-1"><Star size={14} className="text-amber-400" /> {course.rating?.toFixed(1) || 'N/A'}</span>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+          <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+            <GraduationCap size={32} />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">No courses yet</h3>
+          <p className="text-gray-500">This instructor hasn't published any courses.</p>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
+
+const TournamentsTab = ({ user }: { user: User }) => {
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTournaments = async () => {
+      try {
+        const fetchedTournaments = await getHostTournaments(user.uid);
+        setTournaments(fetchedTournaments);
+      } catch (error) {
+        console.error("Failed to fetch tournaments", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTournaments();
+  }, [user.uid]);
+
+  if (loading) return <div className="flex justify-center py-10"><Loader /></div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-bold text-gray-900">Hosted Tournaments</h2>
+      </div>
+      {tournaments.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {tournaments.map(tournament => (
+            <Link key={tournament.id} to={`/tournaments/${tournament.id}`}>
+              <Card className="overflow-hidden hover:shadow-xl transition-shadow h-full flex flex-col">
+                <div className="aspect-video relative">
+                  <img src={tournament.bannerUrl} alt={tournament.title} className="w-full h-full object-cover" />
+                  <div className="absolute top-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded-md font-bold capitalize">
+                    {tournament.status}
+                  </div>
+                </div>
+                <div className="p-4 flex-1 flex flex-col">
+                  <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{tournament.title}</h3>
+                  <div className="mt-auto flex items-center justify-between text-sm text-gray-500">
+                    <span className="flex items-center gap-1"><Users size={14} /> {tournament.registeredCount}/{tournament.maxParticipants}</span>
+                    <span className="font-bold text-indigo-600">৳ {tournament.prizePool}</span>
+                  </div>
+                </div>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 shadow-sm">
+          <div className="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Trophy size={32} />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">No tournaments yet</h3>
+          <p className="text-gray-500">This host hasn't created any tournaments.</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ProductsTab = ({ user }: { user: User }) => (
   <div className="space-y-6">
