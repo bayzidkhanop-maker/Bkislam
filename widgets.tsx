@@ -8,20 +8,31 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const MediaRenderer = ({ url, type, className }: { url: string, type: 'image' | 'video', className?: string }) => {
-  const [src, setSrc] = useState<string>('');
+  const [src, setSrc] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | null = null;
     
     const loadMedia = async () => {
+      if (!url) {
+        setLoading(false);
+        setError(true);
+        return;
+      }
+
+      setLoading(true);
+      setError(false);
+
       if (url.startsWith('local://')) {
         const blob = await getCachedMediaBlob(url);
         if (blob) {
           objectUrl = URL.createObjectURL(blob);
           setSrc(objectUrl);
         } else {
-          console.error("Local media not found:", url);
+          // Media naturally not found if accessed on another device
+          setError(true);
         }
       } else {
         setSrc(url);
@@ -39,16 +50,17 @@ export const MediaRenderer = ({ url, type, className }: { url: string, type: 'im
   }, [url]);
 
   if (loading) return <div className={cn("bg-gray-100 flex items-center justify-center animate-pulse", className)}></div>;
+  if (error || !src) return <div className={cn("bg-gray-100 flex items-center justify-center text-gray-400 text-sm", className)}>Media not found</div>;
 
   if (type === 'video') {
     return <video src={src} controls className={className} />;
   }
 
-  return <img src={src} alt="Media" className={className} />;
+  return <img src={src} alt="Media" className={className} referrerPolicy="no-referrer" />;
 };
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success' | 'warning';
   size?: 'sm' | 'md' | 'lg' | 'icon';
   isLoading?: boolean;
 }
@@ -61,6 +73,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       outline: 'border border-gray-300 bg-transparent hover:bg-gray-50 text-gray-700 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-800 active:scale-[0.98]',
       ghost: 'bg-transparent hover:bg-gray-100 text-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 active:scale-[0.98]',
       danger: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 shadow-sm active:scale-[0.98]',
+      success: 'bg-green-600 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600 shadow-sm active:scale-[0.98]',
+      warning: 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700 shadow-sm active:scale-[0.98]',
     };
 
     const sizes = {

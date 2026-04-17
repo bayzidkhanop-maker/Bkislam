@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, User as UserIcon, PlusSquare, Bell, Search, Settings, LogOut, ShieldAlert, BookOpen, Wallet, Trophy, X, ChevronRight, MessageSquare } from 'lucide-react';
+import { Home, User as UserIcon, PlusSquare, Bell, Search, Settings, LogOut, ShieldAlert, BookOpen, Wallet, Trophy, X, ChevronRight, MessageSquare, Moon } from 'lucide-react';
 import { signOut } from './authService';
 import { User } from './models';
 import { cn } from './widgets';
@@ -19,7 +19,9 @@ export const UserPanel = ({ user }: { user: User }) => {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Home' },
+    { path: '/islamic-hub', icon: Moon, label: 'Islamic Hub' },
     { path: '/courses', icon: BookOpen, label: 'Academy' },
+    { path: '/library', icon: BookOpen, label: 'Library' },
     { path: '/tournaments', icon: Trophy, label: 'Tournaments' },
     { path: '/search', icon: Search, label: 'Search' },
     { path: '/inbox', icon: MessageSquare, label: 'Inbox' },

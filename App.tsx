@@ -34,6 +34,10 @@ import { InboxPage } from './inboxPage';
 import { CallOverlay } from './CallOverlay';
 import { subscribeToIncomingCalls } from './callService';
 import { Call } from './models';
+import { IslamicHubPage } from './IslamicHubPage';
+
+import { EbooksPage } from './EbooksPage';
+import { EbookReaderPage } from './EbookReaderPage';
 
 export const App = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -113,6 +117,9 @@ export const App = () => {
             <Route path="tournaments/:id" element={<TournamentDetailsPage currentUser={user} />} />
             <Route path="tournaments/:id/manage" element={<TournamentManagePage currentUser={user} />} />
             <Route path="inbox" element={<InboxPage currentUser={user} />} />
+            <Route path="islamic-hub" element={<IslamicHubPage currentUser={user} />} />
+            <Route path="library" element={<EbooksPage currentUser={user} />} />
+            <Route path="library/read/:bookId" element={<EbookReaderPage currentUser={user} />} />
           </Route>
         ) : (
           <Route path="*" element={<Navigate to="/login" />} />

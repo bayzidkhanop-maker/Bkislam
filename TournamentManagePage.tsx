@@ -4,7 +4,7 @@ import { Shield, Users, Play, Trophy, Save, Plus, Trash2, Check, X } from 'lucid
 import { getTournament, updateTournament, getTournamentRegistrations, updateRegistrationStatus, getTournamentMatches, createTournamentMatch, updateMatch, submitMatchResult, getMatchResults } from './firestoreService';
 import { Tournament, TournamentRegistration, TournamentMatch, MatchResult, User } from './models';
 import { toast } from 'sonner';
-import { cn } from './widgets';
+import { cn, Button } from './widgets';
 import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -185,9 +185,9 @@ export const TournamentManagePage = ({ currentUser }: { currentUser: User }) => 
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Shield className="text-amber-500" /> Manage: {tournament.title}
           </h1>
-          <button onClick={() => navigate(`/tournaments/${tournament.id}`)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">
+          <Button variant="ghost" onClick={() => navigate(`/tournaments/${tournament.id}`)} className="text-indigo-400 hover:text-indigo-300 text-sm font-medium">
             View Public Page
-          </button>
+          </Button>
         </div>
 
         {/* Tabs */}
@@ -325,9 +325,9 @@ export const TournamentManagePage = ({ currentUser }: { currentUser: User }) => 
                   <label className="block text-xs text-gray-400 mb-1">Scheduled Time</label>
                   <input type="datetime-local" value={newMatchTime} onChange={e => setNewMatchTime(e.target.value)} className="bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-white" />
                 </div>
-                <button onClick={handleCreateMatch} className="flex items-center gap-1 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium">
+                <Button onClick={handleCreateMatch} className="flex items-center gap-1 px-4 py-1.5">
                   <Plus size={16} /> Add Match
-                </button>
+                </Button>
               </div>
 
               {/* Match List */}
@@ -405,9 +405,9 @@ export const TournamentManagePage = ({ currentUser }: { currentUser: User }) => 
                   <input type="number" min="0" required value={resultForm.kills} onChange={e => setResultForm({...resultForm, kills: Number(e.target.value)})} className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm" />
                 </div>
                 <div className="sm:col-span-5 flex justify-end">
-                  <button type="submit" className="flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-medium">
+                  <Button type="submit" className="flex items-center gap-1 px-4 py-2">
                     <Plus size={16} /> Add Result
-                  </button>
+                  </Button>
                 </div>
               </form>
 

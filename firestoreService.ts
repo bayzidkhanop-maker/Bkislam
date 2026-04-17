@@ -640,6 +640,18 @@ export const rejectTransaction = async (transactionId: string, adminNote: string
   }
 };
 
+export const getAllWithdrawals = async (): Promise<WithdrawalRequest[]> => {
+  try {
+    const q = query(collection(db, 'withdrawalRequests'));
+    const snapshot = await getDocs(q);
+    const withdrawals = snapshot.docs.map(doc => doc.data() as WithdrawalRequest);
+    return withdrawals.sort((a, b) => b.createdAt - a.createdAt);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'withdrawalRequests');
+    throw error;
+  }
+};
+
 export const getAllPendingWithdrawals = async (): Promise<WithdrawalRequest[]> => {
   try {
     const q = query(collection(db, 'withdrawalRequests'), where('status', '==', 'pending'));
@@ -1138,6 +1150,15 @@ export const getTournament = async (id: string): Promise<Tournament | null> => {
   }
 };
 
+export const deleteTournament = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'tournaments', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `tournaments/${id}`);
+    throw error;
+  }
+};
+
 export const registerForTournament = async (registrationData: Omit<TournamentRegistration, 'id' | 'createdAt' | 'status'>): Promise<TournamentRegistration> => {
   const id = generateId();
   const newRegistration: TournamentRegistration = {
@@ -1301,6 +1322,7 @@ export const createOrGetChat = async (userId1: string, userId2: string): Promise
     const id = generateId();
     const newChat: Chat = {
       id,
+      type: 'direct',
       participants: [userId1, userId2],
       updatedAt: Date.now(),
       unreadCount: { [userId1]: 0, [userId2]: 0 },
@@ -1312,6 +1334,49 @@ export const createOrGetChat = async (userId1: string, userId2: string): Promise
     return newChat;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'chats');
+    throw error;
+  }
+};
+
+export const createGroupChat = async (creatorId: string, participantIds: string[], name: string, groupIcon?: string): Promise<Chat> => {
+  const id = generateId();
+  const allParticipants = [creatorId, ...participantIds.filter(pid => pid !== creatorId)];
+  const unreadCount: Record<string, number> = {};
+  allParticipants.forEach(p => unreadCount[p] = 0);
+
+  const newChat: Chat = {
+    id,
+    type: 'group',
+    name,
+    groupIcon,
+    adminIds: [creatorId],
+    participants: allParticipants,
+    updatedAt: Date.now(),
+    unreadCount,
+    pinnedBy: [],
+    archivedBy: []
+  };
+
+  try {
+    await setDoc(doc(db, 'chats', id), newChat);
+    return newChat;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `chats/${id}`);
+    throw error;
+  }
+};
+
+export const deleteMessage = async (messageId: string, type: 'for_me' | 'for_everyone', userId?: string): Promise<void> => {
+  try {
+    if (type === 'for_everyone') {
+      await deleteDoc(doc(db, 'messages', messageId));
+    } else if (type === 'for_me' && userId) {
+      await updateDoc(doc(db, 'messages', messageId), {
+        deletedFor: arrayUnion(userId)
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `messages/${messageId}`);
     throw error;
   }
 };
@@ -1402,21 +1467,6 @@ export const markMessagesAsRead = async (chatId: string, userId: string) => {
   }
 };
 
-export const deleteMessage = async (messageId: string, userId: string, forEveryone: boolean = false) => {
-  try {
-    const msgRef = doc(db, 'messages', messageId);
-    if (forEveryone) {
-      await deleteDoc(msgRef);
-    } else {
-      await updateDoc(msgRef, {
-        deletedFor: arrayUnion(userId)
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `messages/${messageId}`);
-  }
-};
-
 export const togglePinChat = async (chatId: string, userId: string, isPinned: boolean) => {
   try {
     const chatRef = doc(db, 'chats', chatId);
@@ -1472,6 +1522,292 @@ export const createReview = async (reviewData: Omit<Review, 'id' | 'createdAt'>)
     return newReview;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, `reviews/${id}`);
+    throw error;
+  }
+};
+
+// --- Advanced Admin & User Management ---
+
+export const logUserActivity = async (uid: string, action: string, details: string, ip?: string, deviceInfo?: string) => {
+  const activityId = generateId();
+  try {
+    const activityDoc = doc(db, 'users', uid, 'activities', activityId);
+    await setDoc(activityDoc, {
+      id: activityId,
+      uid,
+      action,
+      details,
+      ip,
+      deviceInfo,
+      createdAt: Date.now()
+    });
+  } catch (error) {
+    console.error("Failed to log activity", error);
+  }
+};
+
+export const getUserActivities = async (uid: string): Promise<UserActivity[]> => {
+  try {
+    const q = query(collection(db, 'users', uid, 'activities'), orderBy('createdAt', 'desc'), limit(50));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as UserActivity);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, `users/${uid}/activities`);
+    return [];
+  }
+};
+
+export const updateUserAdminStatus = async (uid: string, data: Partial<User>, adminId: string, reason: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'users', uid), data);
+    await logUserActivity(uid, 'admin_update', `Admin (${adminId}) updated user status. Reason: ${reason}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
+    throw error;
+  }
+};
+
+export const adjustUserWalletAsAdmin = async (uid: string, amount: number, adminId: string, reason: string): Promise<void> => {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      walletBalance: increment(amount) // Ensure positive/negative amounts are handled correctly
+    });
+    
+    // Log transaction
+    const txId = generateId();
+    await setDoc(doc(db, 'transactions', txId), {
+      id: txId,
+      userId: uid,
+      amount: Math.abs(amount),
+      type: amount >= 0 ? 'deposit' : 'withdrawal',
+      status: 'completed',
+      date: Date.now(),
+      description: `Admin adjustment: ${reason}`
+    });
+
+    await logUserActivity(uid, 'wallet_adjustment', `Admin (${adminId}) adjusted wallet by ${amount}. Reason: ${reason}`);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `users/${uid}`);
+    throw error;
+  }
+};
+
+export const getAllRoleApplications = async (): Promise<RoleApplication[]> => {
+  try {
+    const q = query(collection(db, 'roleApplications'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as RoleApplication);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'roleApplications');
+    return [];
+  }
+};
+
+export const updateRoleApplicationStatus = async (appId: string, status: 'approved' | 'rejected', adminFeedback: string, adminId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'roleApplications', appId), {
+      status,
+      adminFeedback,
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `roleApplications/${appId}`);
+    throw error;
+  }
+};
+
+// --- Moderation System ---
+
+export const getAllReports = async (): Promise<Report[]> => {
+  try {
+    const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Report);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'reports');
+    return [];
+  }
+};
+
+export const updateReportStatus = async (reportId: string, updates: Partial<Report>, adminId: string): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'reports', reportId), {
+      ...updates,
+      updatedAt: Date.now()
+    });
+    
+    // Log moderation action
+    const logId = generateId();
+    await setDoc(doc(db, 'moderationLogs', logId), {
+      id: logId,
+      adminId,
+      action: 'update_report',
+      targetType: 'report',
+      targetId: reportId,
+      details: `Updated report status to ${updates.status || 'unknown'}`,
+      createdAt: Date.now()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `reports/${reportId}`);
+    throw error;
+  }
+};
+
+export const createModerationLog = async (log: Omit<ModerationLog, 'id' | 'createdAt'>): Promise<void> => {
+  try {
+    const id = generateId();
+    await setDoc(doc(db, 'moderationLogs', id), {
+      ...log,
+      id,
+      createdAt: Date.now()
+    });
+  } catch (error) {
+    console.error("Failed to create moderation log:", error);
+  }
+};
+
+export const getModerationLogs = async (): Promise<ModerationLog[]> => {
+  try {
+    const q = query(collection(db, 'moderationLogs'), orderBy('createdAt', 'desc'), limit(100));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as ModerationLog);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'moderationLogs');
+    return [];
+  }
+};
+
+export const getAutoModSettings = async (): Promise<AutoModSettings | null> => {
+  try {
+    const docRef = doc(db, 'settings', 'automod');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as AutoModSettings;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch automod settings:", error);
+    return null;
+  }
+};
+
+export const updateAutoModSettings = async (settings: Partial<AutoModSettings>, adminId: string): Promise<void> => {
+  try {
+    const docRef = doc(db, 'settings', 'automod');
+    await setDoc(docRef, settings, { merge: true });
+    
+    await createModerationLog({
+      adminId,
+      action: 'update_automod',
+      targetType: 'system',
+      targetId: 'automod',
+      details: 'Updated global auto-moderation settings.'
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'settings/automod');
+    throw error;
+  }
+};
+
+export const getPlatformSettings = async (): Promise<PlatformSettings | null> => {
+  try {
+    const docRef = doc(db, 'settings', 'platform');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as PlatformSettings;
+    }
+    return null;
+  } catch (error) {
+    console.error("Failed to fetch platform settings:", error);
+    return null;
+  }
+};
+
+export const updatePlatformSettings = async (settings: Partial<PlatformSettings>, adminId: string): Promise<void> => {
+  try {
+    const docRef = doc(db, 'settings', 'platform');
+    await setDoc(docRef, settings, { merge: true });
+    
+    // Log setting modification
+    await createModerationLog({
+      adminId,
+      action: 'update_settings',
+      targetType: 'system',
+      targetId: 'platform_settings',
+      details: 'Updated global platform settings.'
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, 'settings/platform');
+    throw error;
+  }
+};
+
+// --- EBOOKS / PDF SYSTEM ---
+
+export const createBook = async (bookData: Omit<Book, 'id' | 'createdAt' | 'updatedAt' | 'totalViews' | 'totalDownloads' | 'totalSales'>): Promise<Book> => {
+  const id = generateId();
+  const newBook: Book = {
+    ...bookData,
+    id,
+    totalViews: 0,
+    totalDownloads: 0,
+    totalSales: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  try {
+    await setDoc(doc(db, 'books', id), newBook);
+    return newBook;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, `books/${id}`);
+    throw error;
+  }
+};
+
+export const updateBook = async (id: string, updates: Partial<Book>): Promise<void> => {
+  try {
+    await updateDoc(doc(db, 'books', id), { ...updates, updatedAt: Date.now() });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `books/${id}`);
+    throw error;
+  }
+};
+
+export const getBooks = async (statusFilter?: string, sellerId?: string): Promise<Book[]> => {
+  try {
+    let q = query(collection(db, 'books'), orderBy('createdAt', 'desc'));
+    
+    // Simplistic handling, in a real app might need composite indexes for both status+seller
+    if (sellerId) {
+      q = query(collection(db, 'books'), where('sellerId', '==', sellerId), orderBy('createdAt', 'desc'));
+    } else if (statusFilter && statusFilter !== 'all') {
+      q = query(collection(db, 'books'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
+    }
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Book);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'books');
+    throw error;
+  }
+};
+
+export const getBook = async (id: string): Promise<Book | null> => {
+  try {
+    const docSnap = await getDoc(doc(db, 'books', id));
+    return docSnap.exists() ? (docSnap.data() as Book) : null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `books/${id}`);
+    throw error;
+  }
+};
+
+export const deleteBook = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'books', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `books/${id}`);
     throw error;
   }
 };

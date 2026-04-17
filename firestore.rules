@@ -424,5 +424,12 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.uid;
     }
 
+    match /books/{bookId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.sellerId == request.auth.uid;
+      allow update: if isAdmin() || resource.data.sellerId == request.auth.uid;
+      allow delete: if isAdmin() || resource.data.sellerId == request.auth.uid;
+    }
+
   }
 }

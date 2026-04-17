@@ -6,6 +6,21 @@ export interface User {
   bio: string;
   createdAt: number;
   role: 'user' | 'admin' | 'instructor' | 'host' | 'seller';
+  // Admin & Security Fields
+  status?: 'active' | 'banned' | 'suspended';
+  shadowBanned?: boolean;
+  warnings?: number;
+  lastActiveAt?: number;
+  ip?: string;
+  deviceInfo?: string;
+  assignedRoles?: string[]; // Allow multiple roles
+  walletStatus?: 'active' | 'frozen';
+  suspensionEnd?: number;
+  twoFactorEnabled?: boolean;
+  adminNotes?: string;
+  isVerifiedEmail?: boolean;
+  isVerifiedPhone?: boolean;
+
   // Advanced Profile Fields
   username?: string;
   phone?: string;
@@ -52,6 +67,28 @@ export interface User {
   };
   blockedUsers?: string[];
   badges?: string[];
+}
+
+export interface UserActivity {
+  id: string;
+  uid: string;
+  action: string;
+  details: string;
+  ip?: string;
+  deviceInfo?: string;
+  createdAt: number;
+}
+
+export interface RoleApplication {
+  id: string;
+  uid: string;
+  roleRequested: 'instructor' | 'host' | 'seller';
+  status: 'pending' | 'approved' | 'rejected';
+  message: string;
+  portfolioUrl?: string;
+  createdAt: number;
+  updatedAt?: number;
+  adminFeedback?: string;
 }
 
 export type TournamentStatus = 'draft' | 'pending' | 'published' | 'live' | 'completed' | 'cancelled';
@@ -111,6 +148,7 @@ export interface MatchResult {
   createdAt: number;
 }
 export type TransactionStatus = 'pending' | 'approved' | 'rejected' | 'completed';
+export type TransactionType = 'deposit' | 'withdrawal' | 'course_purchase' | 'premium_subscription' | 'tournament_fee';
 
 export interface Transaction {
   id: string;
@@ -169,15 +207,113 @@ export interface Comment {
 
 export interface Report {
   id: string;
-  reportedBy: string;
-  postId: string;
+  reportedBy: string; // UID of the user who reported
+  targetType: 'post' | 'comment' | 'message' | 'user';
+  targetId: string; // ID of the reported content/user
   reason: string;
-  status: 'pending' | 'resolved';
+  details?: string;
+  status: 'pending' | 'reviewed' | 'resolved' | 'rejected';
   createdAt: number;
+  updatedAt?: number;
+  assignedTo?: string; // Admin UID
+  adminNotes?: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+}
+
+export interface ModerationLog {
+  id: string;
+  adminId: string;
+  action: string;
+  targetType: 'post' | 'comment' | 'message' | 'user' | 'report' | 'system';
+  targetId: string;
+  details: string;
+  createdAt: number;
+}
+
+export interface AutoModSettings {
+  id: string; // usually 'global'
+  enabled: boolean;
+  blockedKeywords: string[];
+  spamProtection: boolean;
+  maxPostsPerMinute: number;
+  toxicityFilter: boolean;
+}
+
+export interface Book {
+  id: string;
+  sellerId: string;
+  title: string;
+  author: string;
+  description: string;
+  coverUrl: string;
+  fileUrl: string; // Secure URL
+  sampleFileUrl?: string; // Free preview (optional)
+  category: string;
+  tags: string[];
+  price: number;
+  isPublished: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  allowDownload: boolean;
+  fileSize?: number;
+  pages?: number;
+  totalViews: number;
+  totalDownloads: number;
+  totalSales: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PlatformSettings {
+  id: string; // usually 'global'
+  branding: {
+    logoLight: string;
+    logoDark: string;
+    favicon: string;
+    primaryColor: string;
+    secondaryColor: string;
+    fontFamily: string;
+    themeStyle: 'modern' | 'minimal' | 'playful';
+    borderRadius: 'none' | 'sm' | 'md' | 'lg' | 'full';
+  };
+  general: {
+    siteName: string;
+    tagline: string;
+    seoDescription: string;
+    maintenanceMode: boolean;
+    defaultLanguage: string;
+    timezone: string;
+  };
+  financial: {
+    platformCommission: number; // percentage
+    minWithdrawal: number;
+    transactionFee: number;
+    currency: string;
+    enableNagad: boolean;
+    enableBkash: boolean;
+    enableCard: boolean;
+  };
+  security: {
+    require2FA: boolean;
+    sessionTimeoutHours: number;
+    maxLoginAttempts: number;
+  };
+  integrations: {
+    googleAnalyticsId: string;
+    facebookPixel: string;
+  };
+  advanced: {
+    debugMode: boolean;
+    maxUploadSizeMB: number;
+    enableCaching: boolean;
+  };
 }
 
 export interface Chat {
   id: string;
+  type: 'direct' | 'group';
+  name?: string; // For groups
+  groupIcon?: string; // For groups
+  adminIds?: string[]; // For groups
   participants: string[];
   lastMessage?: {
     text: string;

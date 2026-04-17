@@ -10,7 +10,7 @@ import {
   User as UserIcon, Gamepad2, GraduationCap, Wallet, Shield, Settings,
   CheckCircle2, MapPin, Globe, Facebook, Youtube, Twitch, Trophy, Target,
   Crosshair, Medal, CreditCard, History, Bell, Moon, Sun, Lock, Smartphone,
-  LogOut, Trash2, Camera, UploadCloud, Share2, Phone, Archive
+  LogOut, Trash2, Camera, UploadCloud, Share2, Phone, Archive, HardDrive
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -26,6 +26,7 @@ const TABS = [
   { id: 'products', label: 'Products', icon: CreditCard },
   { id: 'gaming', label: 'Gaming', icon: Gamepad2 },
   { id: 'media', label: 'Media', icon: ImageIcon },
+  { id: 'vault', label: 'Local Vault', icon: HardDrive },
   { id: 'wallet', label: 'Wallet', icon: Wallet },
   { id: 'security', label: 'Security', icon: Shield },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -138,7 +139,7 @@ export const ProfilePage = () => {
 
   // Filter tabs based on ownership and role
   const visibleTabs = TABS.filter(t => {
-    if (t.id === 'wallet' || t.id === 'security' || t.id === 'settings') return isOwnProfile;
+    if (t.id === 'wallet' || t.id === 'security' || t.id === 'settings' || t.id === 'vault') return isOwnProfile;
     if (t.id === 'courses') return user.role === 'instructor' || user.role === 'admin';
     if (t.id === 'tournaments') return user.role === 'host' || user.role === 'admin';
     if (t.id === 'products') return user.role === 'seller' || user.role === 'admin';
@@ -344,6 +345,7 @@ export const ProfilePage = () => {
           {activeTab === 'products' && <ProductsTab user={user} />}
           {activeTab === 'gaming' && <GamingTab user={user} />}
           {activeTab === 'media' && <MediaTab posts={posts} />}
+          {activeTab === 'vault' && isOwnProfile && <VaultTab />}
           {activeTab === 'wallet' && isOwnProfile && <WalletTab />}
           {activeTab === 'security' && isOwnProfile && <SecurityTab />}
           {activeTab === 'settings' && isOwnProfile && <SettingsTab user={user} setUser={setUser} />}
@@ -943,6 +945,119 @@ const SettingsTab = ({ user, setUser }: { user: User, setUser: any }) => {
         <Button type="submit">Save Changes</Button>
       </div>
     </form>
+  );
+};
+
+import { getLocalMediaStorageUsage, getAllLocalMedia, deleteLocalMedia } from './localStorageService';
+
+const VaultTab = () => {
+  const [usage, setUsage] = useState<{ usedBytes: number, totalBytes: number, percentage: number, fileCount: number } | null>(null);
+  const [files, setFiles] = useState<{ url: string, size: number, type: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const currentUsage = await getLocalMediaStorageUsage();
+      setUsage(currentUsage);
+      const allFiles = await getAllLocalMedia();
+      setFiles(allFiles);
+    } catch (error) {
+      console.error("Failed to load vault data", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleDelete = async (url: string) => {
+    if (window.confirm('Are you sure you want to delete this file from your local vault?')) {
+      await deleteLocalMedia(url);
+      toast.success('File deleted');
+      loadData();
+    }
+  };
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  if (loading) return <Loader />;
+
+  return (
+    <div className="space-y-6">
+      <Card className="p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-3 bg-indigo-100 text-indigo-600 rounded-xl">
+            <HardDrive size={24} />
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-gray-900">Local Storage Vault</h3>
+            <p className="text-gray-500 text-sm">Private files stored only on this device</p>
+          </div>
+        </div>
+
+        {usage && (
+          <div className="space-y-4 mb-8">
+            <div className="flex justify-between text-sm font-medium">
+              <span className="text-gray-700">{formatBytes(usage.usedBytes)} Used</span>
+              <span className="text-gray-500">{formatBytes(usage.totalBytes)} Total</span>
+            </div>
+            <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all duration-500 ${usage.percentage > 90 ? 'bg-red-500' : usage.percentage > 70 ? 'bg-amber-500' : 'bg-indigo-600'}`}
+                style={{ width: `${Math.min(usage.percentage, 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              {usage.fileCount} files stored locally. This storage is tied to your current browser and device.
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <h4 className="font-bold text-gray-900">Stored Files</h4>
+          {files.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+              <HardDrive className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+              <p className="text-gray-500">Your local vault is empty.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {files.map((file, i) => (
+                <div key={i} className="border border-gray-200 rounded-xl overflow-hidden group relative">
+                  <div className="aspect-video bg-gray-100 flex items-center justify-center relative">
+                    <MediaRenderer url={file.url} type={file.type.startsWith('video') ? 'video' : 'image'} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button 
+                        onClick={() => handleDelete(file.url)}
+                        className="p-2 bg-red-600 text-white rounded-full hover:bg-red-700 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white">
+                    <p className="text-xs font-medium text-gray-900 truncate" title={file.url.replace('local://', '')}>
+                      {file.url.replace('local://', '').split('-').slice(1).join('-') || 'File'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{formatBytes(file.size)} • {file.type}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
   );
 };
 

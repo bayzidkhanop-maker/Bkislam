@@ -4,7 +4,7 @@ import { Trophy, Users, Calendar, ChevronRight, AlertCircle, CheckCircle, Clock,
 import { motion } from 'motion/react';
 import { getTournament, getTournamentRegistrations, registerForTournament } from './firestoreService';
 import { Tournament, TournamentRegistration, TournamentMatch, MatchResult, User } from './models';
-import { cn } from './widgets';
+import { cn, Button } from './widgets';
 import { toast } from 'sonner';
 import { collection, query, where, onSnapshot, orderBy, doc } from 'firebase/firestore';
 import { db } from './firebaseConfig';
@@ -176,20 +176,20 @@ export const TournamentDetailsPage = ({ currentUser }: { currentUser: User }) =>
               
               {!isHostOrAdmin && tournament.status === 'published' && (
                 isRegistered ? (
-                  <button disabled className="w-full py-3 bg-green-600/20 text-green-400 border border-green-500/50 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed">
+                  <Button disabled className="w-full py-3 bg-green-600/20 text-green-400 border border-green-500/50 rounded-xl font-bold flex items-center justify-center gap-2 cursor-not-allowed hover:bg-green-600/20">
                     <CheckCircle size={20} /> Registered
-                  </button>
+                  </Button>
                 ) : tournament.registeredCount >= tournament.maxPlayers ? (
-                  <button disabled className="w-full py-3 bg-gray-700 text-gray-400 rounded-xl font-bold cursor-not-allowed">
+                  <Button disabled className="w-full py-3 bg-gray-700 text-gray-400 rounded-xl font-bold cursor-not-allowed hover:bg-gray-700">
                     Tournament Full
-                  </button>
+                  </Button>
                 ) : (
-                  <button 
+                  <Button 
                     onClick={() => setShowJoinModal(true)}
-                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+                    className="w-full py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/20"
                   >
                     Join Tournament
-                  </button>
+                  </Button>
                 )
               )}
 
@@ -384,20 +384,21 @@ export const TournamentDetailsPage = ({ currentUser }: { currentUser: User }) =>
               </div>
 
               <div className="pt-4 flex gap-3">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   onClick={() => setShowJoinModal(false)}
-                  className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+                  className="flex-1 py-2.5"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={isJoining}
-                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center"
+                  isLoading={isJoining}
+                  className="flex-1 py-2.5"
                 >
-                  {isJoining ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Confirm Join'}
-                </button>
+                  Confirm Join
+                </Button>
               </div>
             </form>
           </motion.div>

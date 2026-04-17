@@ -263,7 +263,7 @@ export const AdminCourseManagement = ({ currentUser }: { currentUser: User }) =>
                   <tr key={course.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="py-4">
                       <div className="flex items-center gap-3">
-                        <img src={course.thumbnail} alt={course.title} className="w-12 h-12 rounded-lg object-cover bg-gray-100" />
+                        <img src={course.thumbnailURL} alt={course.title} className="w-12 h-12 rounded-lg object-cover bg-gray-100" />
                         <div>
                           <p className="font-medium text-gray-900 dark:text-white line-clamp-1">{course.title}</p>
                           <p className="text-xs text-gray-500">{course.category}</p>
@@ -281,7 +281,7 @@ export const AdminCourseManagement = ({ currentUser }: { currentUser: User }) =>
                         {course.status}
                       </span>
                     </td>
-                    <td className="py-4 text-sm text-gray-700 dark:text-gray-300">{course.enrolledCount || 0}</td>
+                    <td className="py-4 text-sm text-gray-700 dark:text-gray-300">{course.studentsCount || 0}</td>
                     <td className="py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button 
@@ -362,7 +362,7 @@ export const AdminCourseManagement = ({ currentUser }: { currentUser: User }) =>
                 {activeDetailTab === 'overview' && (
                   <Card className="p-6">
                     <div className="flex gap-6">
-                      <img src={selectedCourse.thumbnail} alt={selectedCourse.title} className="w-48 h-32 object-cover rounded-xl" />
+                      <img src={selectedCourse.thumbnailURL} alt={selectedCourse.title} className="w-48 h-32 object-cover rounded-xl" />
                       <div>
                         <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{selectedCourse.title}</h3>
                         <p className="text-gray-500 mb-4 line-clamp-2">{selectedCourse.description}</p>
@@ -390,12 +390,7 @@ export const AdminCourseManagement = ({ currentUser }: { currentUser: User }) =>
                           <div key={module.id} className="border border-gray-100 dark:border-gray-700 rounded-xl p-4">
                             <h5 className="font-medium text-gray-900 dark:text-white mb-2">Module {index + 1}: {module.title}</h5>
                             <div className="space-y-2 pl-4 border-l-2 border-gray-100 dark:border-gray-700">
-                              {module.lessons.map((lesson, lIndex) => (
-                                <div key={lesson.id} className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                                  <span>{lIndex + 1}. {lesson.title}</span>
-                                  <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{lesson.type}</span>
-                                </div>
-                              ))}
+                              <div className="text-sm text-gray-500 italic">Lessons will appear here</div>
                             </div>
                           </div>
                         ))}
@@ -512,11 +507,11 @@ export const AdminCourseManagement = ({ currentUser }: { currentUser: User }) =>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
                       <span className="text-gray-500">Total Enrolled</span>
-                      <span className="font-bold text-gray-900 dark:text-white">{selectedCourse.enrolledCount || 0}</span>
+                      <span className="font-bold text-gray-900 dark:text-white">{selectedCourse.studentsCount || 0}</span>
                     </div>
                     <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-2">
                       <span className="text-gray-500">Revenue</span>
-                      <span className="font-bold text-green-600">${(selectedCourse.enrolledCount || 0) * selectedCourse.price}</span>
+                      <span className="font-bold text-green-600">${(selectedCourse.studentsCount || 0) * selectedCourse.price}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-gray-500">Rating</span>

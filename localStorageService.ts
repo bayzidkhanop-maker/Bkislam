@@ -67,7 +67,59 @@ export const getCachedUser = async (uid: string): Promise<User | undefined> => {
   return db.get('users', uid);
 };
 
+export const MAX_LOCAL_STORAGE_BYTES = 100 * 1024 * 1024 * 1024; // 100 GB
+
+export const getLocalMediaStorageUsage = async (): Promise<{ usedBytes: number, totalBytes: number, percentage: number, fileCount: number }> => {
+  const db = await dbPromise;
+  let usedBytes = 0;
+  let fileCount = 0;
+  
+  const tx = db.transaction('mediaBlobs', 'readonly');
+  let cursor = await tx.store.openCursor();
+  
+  while (cursor) {
+    usedBytes += cursor.value.size;
+    fileCount++;
+    cursor = await cursor.continue();
+  }
+  
+  return {
+    usedBytes,
+    totalBytes: MAX_LOCAL_STORAGE_BYTES,
+    percentage: (usedBytes / MAX_LOCAL_STORAGE_BYTES) * 100,
+    fileCount
+  };
+};
+
+export const getAllLocalMedia = async (): Promise<{ url: string, size: number, type: string }[]> => {
+  const db = await dbPromise;
+  const media = [];
+  const tx = db.transaction('mediaBlobs', 'readonly');
+  let cursor = await tx.store.openCursor();
+  
+  while (cursor) {
+    media.push({
+      url: cursor.key,
+      size: cursor.value.size,
+      type: cursor.value.type
+    });
+    cursor = await cursor.continue();
+  }
+  
+  return media;
+};
+
+export const deleteLocalMedia = async (url: string) => {
+  const db = await dbPromise;
+  await db.delete('mediaBlobs', url);
+};
+
 export const cacheMediaBlob = async (url: string, blob: Blob) => {
+  const usage = await getLocalMediaStorageUsage();
+  if (usage.usedBytes + blob.size > MAX_LOCAL_STORAGE_BYTES) {
+    throw new Error("Local storage quota exceeded. Please free up some space.");
+  }
+  
   const db = await dbPromise;
   await db.put('mediaBlobs', blob, url);
 };

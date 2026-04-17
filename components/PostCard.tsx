@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { Post, User } from '../models';
 import { updatePost, softDeletePost, deletePost, togglePinPost, toggleArchivePost, toggleComments, createPost } from '../firestoreService';
-import { MediaRenderer } from '../widgets';
+import { MediaRenderer, Button } from '../widgets';
 
 interface PostCardProps {
   post: Post;
@@ -365,19 +365,20 @@ export const PostCard: React.FC<PostCardProps> = ({
                 )}
               </div>
               <div className="p-6 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
-                <button 
+                <Button 
+                  variant="secondary"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="px-5 py-2.5 text-gray-700 font-medium hover:bg-gray-200 rounded-xl transition-colors"
+                  className="px-5 py-2.5"
                 >
                   Cancel
-                </button>
-                <button 
+                </Button>
+                <Button 
                   onClick={handleEditSubmit}
-                  disabled={isSubmitting}
-                  className="px-5 py-2.5 bg-indigo-600 text-white font-medium hover:bg-indigo-700 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
+                  isLoading={isSubmitting}
+                  className="px-5 py-2.5 flex items-center gap-2"
                 >
-                  {isSubmitting ? 'Saving...' : <><Check size={18} /> Save Changes</>}
-                </button>
+                  <Check size={18} /> Save Changes
+                </Button>
               </div>
             </motion.div>
           </div>
@@ -400,26 +401,29 @@ export const PostCard: React.FC<PostCardProps> = ({
               <div className="p-6">
                 <p className="text-gray-600 mb-6">Are you sure you want to delete this post? You can move it to trash or permanently delete it.</p>
                 <div className="flex flex-col gap-3">
-                  <button 
+                  <Button 
+                    variant="outline"
                     onClick={() => handleDeleteConfirm(false)}
-                    disabled={isSubmitting}
-                    className="w-full py-3 bg-orange-100 text-orange-700 font-medium hover:bg-orange-200 rounded-xl transition-colors disabled:opacity-50"
+                    isLoading={isSubmitting}
+                    className="w-full py-3 text-orange-700 border-orange-200 hover:bg-orange-50"
                   >
                     Move to Trash (Soft Delete)
-                  </button>
-                  <button 
+                  </Button>
+                  <Button 
+                    variant="danger"
                     onClick={() => handleDeleteConfirm(true)}
-                    disabled={isSubmitting}
-                    className="w-full py-3 bg-red-600 text-white font-medium hover:bg-red-700 rounded-xl transition-colors disabled:opacity-50"
+                    isLoading={isSubmitting}
+                    className="w-full py-3"
                   >
                     Permanently Delete
-                  </button>
-                  <button 
+                  </Button>
+                  <Button 
+                    variant="ghost"
                     onClick={() => setIsDeleteModalOpen(false)}
-                    className="w-full py-3 text-gray-700 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+                    className="w-full py-3"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </div>
             </motion.div>

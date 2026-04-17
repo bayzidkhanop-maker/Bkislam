@@ -1,13 +1,12 @@
-import { cacheMediaBlob } from './localStorageService';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { storage } from './firebaseConfig';
+import { cacheMediaBlob, deleteLocalMedia } from './localStorageService';
 
-export const uploadMedia = async (file: File, path: string, onProgress?: (progress: number) => void): Promise<string> => {
+export const uploadMedia = async (file: File, path: string, onProgress?: (progress: number) => void, storageType: 'cloud' | 'local' = 'cloud'): Promise<string> => {
   return new Promise(async (resolve, reject) => {
-    if (onProgress) onProgress(10);
-
-    // For videos or large files, store in local IndexedDB to bypass Firestore 1MB limit
-    // and simulate "1TB Local Storage"
-    if (file.type.startsWith('video/') || file.size > 800 * 1024) {
+    if (storageType === 'local') {
       try {
+        if (onProgress) onProgress(10);
         const localUrl = `local://${path}-${file.name}`;
         if (onProgress) onProgress(50);
         await cacheMediaBlob(localUrl, file);
@@ -19,57 +18,45 @@ export const uploadMedia = async (file: File, path: string, onProgress?: (progre
       return;
     }
 
-    // If it's a small image, compress it to avoid Firestore 1MB limit
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 800;
-          const MAX_HEIGHT = 800;
-          let width = img.width;
-          let height = img.height;
+    const storageRef = ref(storage, path);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          
-          if (onProgress) onProgress(100);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
-        };
-        img.onerror = reject;
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    } else {
-      // Small non-image files
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (onProgress) onProgress(100);
-        resolve(reader.result as string);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    }
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        if (onProgress) onProgress(progress);
+      },
+      (error) => {
+        reject(error);
+      },
+      async () => {
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(downloadURL);
+        } catch (error) {
+          reject(error);
+        }
+      }
+    );
   });
 };
 
 export const deleteMedia = async (url: string): Promise<void> => {
-  // No-op for local base64 storage
-  return Promise.resolve();
+  if (!url) return Promise.resolve();
+  
+  if (url.startsWith('local://')) {
+    return deleteLocalMedia(url);
+  }
+  
+  if (url.startsWith('data:')) {
+    return Promise.resolve();
+  }
+  
+  try {
+    const storageRef = ref(storage, url);
+    await deleteObject(storageRef);
+  } catch (error) {
+    console.error("Error deleting media:", error);
+  }
 };

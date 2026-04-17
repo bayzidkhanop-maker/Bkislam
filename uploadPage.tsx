@@ -15,6 +15,7 @@ export const UploadPage = ({ currentUser }: { currentUser: User }) => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [storageType, setStorageType] = useState<'cloud' | 'local'>('cloud');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -51,7 +52,7 @@ export const UploadPage = ({ currentUser }: { currentUser: User }) => {
       let finalContent = content;
       if (type !== 'text' && file) {
         const path = `posts/${currentUser.uid}/${Date.now()}-${file.name}`;
-        finalContent = await uploadMedia(file, path, setProgress);
+        finalContent = await uploadMedia(file, path, setProgress, storageType);
       }
 
       await createPost({
@@ -127,7 +128,9 @@ export const UploadPage = ({ currentUser }: { currentUser: User }) => {
                   <UploadCloud className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                   <p className="text-sm text-gray-600 mb-1">Click to upload or drag and drop</p>
                   <p className="text-xs text-gray-500">
-                    {type === 'image' ? 'PNG, JPG, GIF (Unlimited Local Storage)' : 'MP4, WebM (Unlimited Local Storage up to 1TB)'}
+                    {storageType === 'cloud' 
+                      ? (type === 'image' ? 'PNG, JPG, GIF up to 5MB' : 'MP4, WebM up to 50MB')
+                      : (type === 'image' ? 'PNG, JPG, GIF (100GB Local Vault)' : 'MP4, WebM (100GB Local Vault)')}
                   </p>
                 </div>
               ) : (
@@ -154,6 +157,39 @@ export const UploadPage = ({ currentUser }: { currentUser: User }) => {
                 onChange={handleFileChange}
                 className="hidden"
               />
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Storage Location</label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="storageType" 
+                      value="cloud" 
+                      checked={storageType === 'cloud'} 
+                      onChange={() => setStorageType('cloud')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-700">Public Cloud (Visible to everyone)</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input 
+                      type="radio" 
+                      name="storageType" 
+                      value="local" 
+                      checked={storageType === 'local'} 
+                      onChange={() => setStorageType('local')}
+                      className="text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-700">Private Local Vault (100GB)</span>
+                  </label>
+                </div>
+                {storageType === 'local' && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Note: Files saved to the local vault are only visible on this device and will not be seen by other users.
+                  </p>
+                )}
+              </div>
 
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Caption (Optional)</label>

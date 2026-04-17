@@ -5,7 +5,7 @@ import {
   Settings, Image as ImageIcon, Bell, Shield, MessageSquare, 
   FileText, LogOut, Menu, X, ChevronRight, Globe, Lock,
   AlertTriangle, ShieldCheck, Trash2, ExternalLink, CheckCircle, XCircle, ArrowUpRight,
-  Search, Filter, MoreVertical, Edit, Ban
+  Search, Filter, MoreVertical, Edit, Ban, PlayCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getAllUsers, getReportedPosts, resolveReport, deletePost, deleteUser, getAllPendingTransactions, getAllPendingWithdrawals, approveTransaction, rejectTransaction, approveWithdrawal, rejectWithdrawal, getAllTransactions, updateUserRole } from './firestoreService';
@@ -14,6 +14,12 @@ import { Card, Button, Loader, Input } from './widgets';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import { AdminCourseManagement } from './AdminCourseManagement';
+import { AdminUserManagement } from './AdminUserManagement';
+import { AdminModerationSystem } from './AdminModerationSystem';
+import { AdminSettingsSystem } from './AdminSettingsSystem';
+import { AdminFinancialSystem } from './AdminFinancialSystem';
+import { AdminTournamentManagement } from './AdminTournamentManagement';
+import { AdminBookManagement } from './AdminBookManagement';
 
 export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
   const navigate = useNavigate();
@@ -153,7 +159,8 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'users', label: 'Users & Roles', icon: Users },
-    { id: 'courses', label: 'Courses', icon: BookOpen },
+    { id: 'courses', label: 'Video Courses', icon: PlayCircle },
+    { id: 'books', label: 'eBooks & PDFs', icon: BookOpen },
     { id: 'tournaments', label: 'Tournaments', icon: Trophy },
     { id: 'financials', label: 'Financials', icon: Wallet },
     { id: 'reports', label: 'Moderation', icon: AlertTriangle },
@@ -331,204 +338,29 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
 
             {/* Users View */}
             {activeTab === 'users' && (
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="Search users..." 
-                      value={userSearch}
-                      onChange={(e) => setUserSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <Button variant="outline" className="gap-2"><Filter size={16}/> Filter</Button>
-                </div>
-                
-                <Card className="overflow-hidden border-0 shadow-sm ring-1 ring-gray-200 dark:ring-gray-700">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider">
-                          <th className="p-4 font-semibold">User</th>
-                          <th className="p-4 font-semibold">Role</th>
-                          <th className="p-4 font-semibold">Joined</th>
-                          <th className="p-4 font-semibold text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                        {users.filter(u => u.name.toLowerCase().includes(userSearch.toLowerCase()) || u.email.toLowerCase().includes(userSearch.toLowerCase())).map(u => (
-                          <tr key={u.uid} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <img src={u.avatarURL || `https://ui-avatars.com/api/?name=${u.name}`} alt="" className="w-10 h-10 rounded-full" />
-                                <div>
-                                  <p className="font-medium text-gray-900 dark:text-white">{u.name}</p>
-                                  <p className="text-xs text-gray-500">{u.email}</p>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="p-4">
-                              <select 
-                                value={u.role}
-                                onChange={(e) => handleRoleChange(u.uid, e.target.value as any)}
-                                disabled={actionLoading === u.uid || (u.role === 'admin' && u.uid === currentUser.uid)}
-                                className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer focus:ring-2 focus:ring-indigo-500 ${
-                                  u.role === 'admin' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400' : 
-                                  u.role === 'instructor' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                  u.role === 'host' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-                                  'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                                }`}
-                              >
-                                <option value="user">User</option>
-                                <option value="instructor">Instructor</option>
-                                <option value="host">Host</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                            </td>
-                            <td className="p-4 text-gray-500 text-sm">
-                              {formatDistanceToNow(u.createdAt, { addSuffix: true })}
-                            </td>
-                            <td className="p-4 text-right">
-                              <div className="flex items-center justify-end gap-2">
-                                <button className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50"><Edit size={16}/></button>
-                                <button className="p-1.5 text-gray-400 hover:text-amber-600 rounded-lg hover:bg-amber-50"><Ban size={16}/></button>
-                                {u.role !== 'admin' && (
-                                  <button 
-                                    onClick={() => handleDeleteUser(u.uid)} 
-                                    disabled={actionLoading === u.uid}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Card>
-              </div>
+              <AdminUserManagement 
+                users={users} 
+                currentUser={currentUser} 
+                onUpdate={async () => {
+                  const fetchedUsers = await getAllUsers();
+                  setUsers(fetchedUsers);
+                }} 
+              />
             )}
 
             {/* Financials View */}
             {activeTab === 'financials' && (
-              <div className="space-y-6">
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Pending Transactions</h2>
-                {pendingTransactions.length === 0 ? (
-                  <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                    <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-3" />
-                    <p className="text-gray-500">All caught up! No pending transactions.</p>
-                  </div>
-                ) : (
-                  <div className="grid gap-4">
-                    {pendingTransactions.map(tx => (
-                      <Card key={tx.id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-0.5 rounded uppercase">{tx.type.replace('_', ' ')}</span>
-                            <span className="text-sm text-gray-500">{formatDistanceToNow(tx.createdAt, { addSuffix: true })}</span>
-                          </div>
-                          <p className="font-medium text-gray-900 dark:text-white">Amount: ৳{tx.amount}</p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">User ID: <span className="font-mono">{tx.userId}</span></p>
-                          {tx.paymentMethod && <p className="text-sm text-gray-600 dark:text-gray-400">Method: {tx.paymentMethod}</p>}
-                          {tx.transactionId && <p className="text-sm text-gray-600 dark:text-gray-400">TrxID: <span className="font-mono font-bold">{tx.transactionId}</span></p>}
-                        </div>
-                        <div className="flex flex-col gap-2 w-full sm:w-auto">
-                          <Input 
-                            placeholder="Admin note (required for rejection)" 
-                            value={adminNote} 
-                            onChange={(e) => setAdminNote(e.target.value)}
-                            className="text-sm"
-                          />
-                          <div className="flex gap-2">
-                            <Button 
-                              onClick={() => handleApproveTransaction(tx)} 
-                              disabled={actionLoading === tx.id}
-                              className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              <CheckCircle size={16} className="mr-1"/> Approve
-                            </Button>
-                            <Button 
-                              onClick={() => handleRejectTransaction(tx.id)} 
-                              disabled={actionLoading === tx.id}
-                              variant="outline"
-                              className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
-                            >
-                              <XCircle size={16} className="mr-1"/> Reject
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <AdminFinancialSystem currentUser={currentUser} />
             )}
 
             {/* Settings & Branding View */}
             {activeTab === 'settings' && (
-              <div className="space-y-6 max-w-3xl">
-                <Card className="p-6">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <ImageIcon size={20} className="text-indigo-600" />
-                    Logo & Branding System
-                  </h2>
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Primary Logo (Light Mode)</label>
-                      <div className="flex items-center gap-4">
-                        <div className="w-32 h-12 bg-gray-100 dark:bg-gray-800 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
-                          <span className="text-xs text-gray-500">Preview</span>
-                        </div>
-                        <Button variant="outline">Upload Image</Button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Primary Logo (Dark Mode)</label>
-                      <div className="flex items-center gap-4">
-                        <div className="w-32 h-12 bg-gray-900 rounded border border-dashed border-gray-700 flex items-center justify-center">
-                          <span className="text-xs text-gray-400">Preview</span>
-                        </div>
-                        <Button variant="outline">Upload Image</Button>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Favicon</label>
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center">
-                          <span className="text-[10px] text-gray-500">16x16</span>
-                        </div>
-                        <Button variant="outline">Upload Favicon</Button>
-                      </div>
-                    </div>
-                    <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <Button className="w-full">Save Branding Settings</Button>
-                    </div>
-                  </div>
-                </Card>
+              <AdminSettingsSystem currentUser={currentUser} />
+            )}
 
-                <Card className="p-6">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Globe size={20} className="text-indigo-600" />
-                    Website Information
-                  </h2>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Site Name</label>
-                      <Input defaultValue="Deenstream" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SEO Description</label>
-                      <textarea className="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500" rows={3} defaultValue="The ultimate platform for learning and esports."></textarea>
-                    </div>
-                    <Button>Save Information</Button>
-                  </div>
-                </Card>
-              </div>
+            {/* Moderation / Reports View */}
+            {activeTab === 'reports' && (
+              <AdminModerationSystem currentUser={currentUser} />
             )}
 
             {/* Placeholders for other tabs */}
@@ -536,19 +368,14 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
               <AdminCourseManagement currentUser={currentUser} />
             )}
 
-            {(activeTab === 'tournaments' || activeTab === 'reports') && (
-              <div className="text-center py-20">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 mb-4">
-                  <Settings size={32} />
-                </div>
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">Module In Development</h2>
-                <p className="text-gray-500">The {activeTab} management module is currently being upgraded to the enterprise version.</p>
-                {activeTab === 'tournaments' && (
-                  <Link to="/tournaments" className="mt-4 inline-block">
-                    <Button>Go to Public Tournaments Page</Button>
-                  </Link>
-                )}
-              </div>
+            {/* Tournaments View */}
+            {activeTab === 'tournaments' && (
+              <AdminTournamentManagement currentUser={currentUser} />
+            )}
+
+            {/* eBooks View */}
+            {activeTab === 'books' && (
+              <AdminBookManagement currentUser={currentUser} />
             )}
 
           </div>
