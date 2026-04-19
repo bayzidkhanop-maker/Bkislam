@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getUser, getUserPosts, updateUser, followUser, unfollowUser, getInstructorCourses, getHostTournaments } from './firestoreService';
+import { getUser, getUserPosts, updateUser, followUser, unfollowUser, getInstructorCourses, getHostTournaments, subscribeToUser } from './firestoreService';
 import { startCall } from './callService';
 import { User, Post, Course, Tournament } from './models';
 import { Card, Button, Input, Loader, MediaRenderer } from './widgets';
@@ -56,17 +56,25 @@ export const ProfilePage = () => {
 
   useEffect(() => {
     if (!uid) return;
-    const fetchData = async () => {
-      setLoading(true);
-      const fetchedUser = await getUser(uid);
+    setLoading(true);
+    let isFirstLoad = true;
+    
+    // Subscribe for real-time user updates (wallet, followers, etc.)
+    const unsubscribeUser = subscribeToUser(uid, async (fetchedUser) => {
       if (fetchedUser) {
         setUser(fetchedUser);
-        const fetchedPosts = await getUserPosts(uid, isOwnProfile);
-        setPosts(fetchedPosts);
+        if (isFirstLoad) {
+          const fetchedPosts = await getUserPosts(uid, isOwnProfile);
+          setPosts(fetchedPosts);
+          setLoading(false);
+          isFirstLoad = false;
+        }
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
-    };
-    fetchData();
+    });
+
+    return () => unsubscribeUser();
   }, [uid]);
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -852,6 +860,9 @@ const SettingsTab = ({ user, setUser }: { user: User, setUser: any }) => {
     language: user.language || '',
     ffUid: user.gaming?.ffUid || '',
     inGameName: user.gaming?.inGameName || '',
+    facebook: user.socialLinks?.facebook || '',
+    youtube: user.socialLinks?.youtube || '',
+    discord: user.socialLinks?.discord || '',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -873,6 +884,12 @@ const SettingsTab = ({ user, setUser }: { user: User, setUser: any }) => {
           ...user.gaming,
           ffUid: formData.ffUid,
           inGameName: formData.inGameName,
+        },
+        socialLinks: {
+          ...user.socialLinks,
+          facebook: formData.facebook,
+          youtube: formData.youtube,
+          discord: formData.discord,
         }
       };
       await updateUser(user.uid, updates);
@@ -936,6 +953,24 @@ const SettingsTab = ({ user, setUser }: { user: User, setUser: any }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">In-Game Name</label>
             <Input name="inGameName" value={formData.inGameName} onChange={handleChange} placeholder="ProGamer99" />
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <h3 className="text-lg font-bold text-gray-900 mb-6">Social Links</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Facebook URL</label>
+            <Input name="facebook" value={formData.facebook} onChange={handleChange} placeholder="https://facebook.com/..." />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">YouTube URL</label>
+            <Input name="youtube" value={formData.youtube} onChange={handleChange} placeholder="https://youtube.com/..." />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Discord Invite/URL</label>
+            <Input name="discord" value={formData.discord} onChange={handleChange} placeholder="https://discord.gg/..." />
           </div>
         </div>
       </Card>

@@ -14,7 +14,8 @@ import {
   increment,
   onSnapshot,
   deleteDoc,
-  runTransaction
+  runTransaction,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult, Notification, Chat, Message, Call, Review, Category, UserActivity, RoleApplication, ModerationLog, AutoModSettings, PlatformSettings, Book, BookPurchase, RamadanTracker, Coupon, CouponUsage } from './models';
@@ -288,6 +289,19 @@ export const getUser = async (uid: string): Promise<User | null> => {
       avatarURL: `https://ui-avatars.com/api/?name=Unknown&background=random`
     } as User;
   }
+};
+
+export const subscribeToUser = (uid: string, callback: (user: User | null) => void) => {
+  const docRef = doc(db, 'users', uid);
+  return onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data() as User);
+    } else {
+      callback(null);
+    }
+  }, (error) => {
+    try { handleFirestoreError(error, OperationType.GET, `users/${uid}`); } catch (e) {}
+  });
 };
 
 export const updateUser = async (uid: string, data: Partial<User>): Promise<void> => {
@@ -676,8 +690,27 @@ export const approveTransaction = async (transactionId: string, userId: string, 
         throw new Error("Transaction is not pending or does not exist");
       }
 
+      const txData = txDoc.data() as Transaction;
       tx.update(txRef, { status: 'approved', updatedAt: Date.now() });
-      tx.update(userRef, { walletBalance: increment(amount) });
+
+      if (txData.type === 'deposit') {
+        tx.update(userRef, { walletBalance: increment(amount) });
+      } else if (txData.type === 'course_purchase' && txData.relatedId) {
+        // Find existing pending enrollments and payments for this user & course
+        const pQuery = query(collection(db, 'payments'), where('userId', '==', userId), where('courseId', '==', txData.relatedId), where('status', '==', 'pending'));
+        const eQuery = query(collection(db, 'enrollments'), where('userId', '==', userId), where('courseId', '==', txData.relatedId), where('status', '==', 'pending'));
+        
+        const [pSnap, eSnap] = await Promise.all([getDocs(pQuery), getDocs(eQuery)]);
+        
+        pSnap.forEach(p => tx.update(p.ref, { status: 'approved' }));
+        eSnap.forEach(e => tx.update(e.ref, { status: 'active' }));
+      } else if (txData.type === 'tournament_fee' && txData.relatedId) {
+        const trQuery = query(collection(db, 'tournamentRegistrations'), where('userId', '==', userId), where('tournamentId', '==', txData.relatedId), where('paymentStatus', '==', 'pending'));
+        const trSnap = await getDocs(trQuery);
+        trSnap.forEach(tr => tx.update(tr.ref, { paymentStatus: 'verified' }));
+        const tRef = doc(db, 'tournaments', txData.relatedId);
+        tx.update(tRef, { registeredCount: increment(trSnap.docs.length > 0 ? 1 : 0) });
+      }
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `transactions/${transactionId}`);
@@ -687,10 +720,31 @@ export const approveTransaction = async (transactionId: string, userId: string, 
 
 export const rejectTransaction = async (transactionId: string, adminNote: string): Promise<void> => {
   try {
-    await updateDoc(doc(db, 'transactions', transactionId), {
-      status: 'rejected',
-      adminNote,
-      updatedAt: Date.now()
+    await runTransaction(db, async (tx) => {
+      const txRef = doc(db, 'transactions', transactionId);
+      const txDoc = await tx.get(txRef);
+      
+      if (!txDoc.exists() || txDoc.data().status !== 'pending') {
+        throw new Error("Transaction is not pending or does not exist");
+      }
+
+      const txData = txDoc.data() as Transaction;
+      tx.update(txRef, { status: 'rejected', adminNote, updatedAt: Date.now() });
+
+      if (txData.type === 'course_purchase' && txData.relatedId) {
+        const pQuery = query(collection(db, 'payments'), where('userId', '==', txData.userId), where('courseId', '==', txData.relatedId), where('status', '==', 'pending'));
+        const eQuery = query(collection(db, 'enrollments'), where('userId', '==', txData.userId), where('courseId', '==', txData.relatedId), where('status', '==', 'pending'));
+        
+        const [pSnap, eSnap] = await Promise.all([getDocs(pQuery), getDocs(eQuery)]);
+        
+        pSnap.forEach(p => tx.update(p.ref, { status: 'rejected' }));
+        // For enrollments, we probably can just delete them or mark them as rejected.
+        eSnap.forEach(e => tx.update(e.ref, { status: 'rejected' as any }));
+      } else if (txData.type === 'tournament_fee' && txData.relatedId) {
+        const trQuery = query(collection(db, 'tournamentRegistrations'), where('userId', '==', txData.userId), where('tournamentId', '==', txData.relatedId), where('paymentStatus', '==', 'pending'));
+        const trSnap = await getDocs(trQuery);
+        trSnap.forEach(tr => tx.update(tr.ref, { paymentStatus: 'rejected' }));
+      }
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `transactions/${transactionId}`);
@@ -1027,6 +1081,7 @@ export const enrollInCourse = async (userId: string, courseId: string, amount: n
   try {
     const paymentId = generateId();
     const enrollmentId = generateId();
+    const txId = generateId();
 
     const isFree = amount === 0;
     const status = isFree ? 'active' : 'pending';
@@ -1052,8 +1107,25 @@ export const enrollInCourse = async (userId: string, courseId: string, amount: n
       enrolledAt: Date.now()
     };
 
-    await setDoc(doc(db, 'payments', paymentId), payment);
-    await setDoc(doc(db, 'enrollments', enrollmentId), enrollment);
+    const transaction = {
+      id: txId,
+      userId,
+      type: 'course_purchase',
+      amount,
+      status: isFree ? 'completed' : 'pending',
+      method: method as any,
+      transactionId: transactionId || 'FREE',
+      relatedId: courseId,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'payments', paymentId), payment);
+    batch.set(doc(db, 'enrollments', enrollmentId), enrollment);
+    batch.set(doc(db, 'transactions', txId), transaction);
+    await batch.commit();
+
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, 'enrollments/payments');
     throw error;
@@ -1584,7 +1656,7 @@ export const subscribeToChats = (userId: string, callback: (chats: Chat[]) => vo
 
 export const sendMessage = async (chatId: string, senderId: string, text: string, type: Message['type'] = 'text', mediaUrl?: string, fileName?: string, fileSize?: number, replyTo?: string): Promise<Message> => {
   const id = generateId();
-  const newMessage: Message = {
+  const rawMessage: any = {
     id,
     chatId,
     senderId,
@@ -1598,6 +1670,11 @@ export const sendMessage = async (chatId: string, senderId: string, text: string
     deletedFor: [],
     replyTo
   };
+
+  // Remove undefined fields
+  const newMessage = Object.fromEntries(
+    Object.entries(rawMessage).filter(([_, v]) => v !== undefined)
+  ) as unknown as Message;
 
   try {
     await runTransaction(db, async (transaction) => {

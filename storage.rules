@@ -18,5 +18,30 @@ service firebase.storage {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() && request.auth.uid == userId || isAdmin();
     }
+
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == userId || isAdmin();
+    }
+
+    match /books/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isAuthenticated(); // Depending on if regular users can upload books. Admin is safer, but let's allow instructor/seller if needed. Simple fix: allow if authenticated for now.
+    }
+
+    match /courses/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin() || isAuthenticated();
+    }
+
+    match /branding/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /chats/{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
   }
 }

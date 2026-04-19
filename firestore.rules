@@ -139,13 +139,13 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return data.name is string && data.name.size() > 0 && data.name.size() < 50 &&
-             data.email is string && isValidEmail(data.email) &&
-             data.role in ['user', 'admin', 'instructor'] &&
-             (!('bio' in data) || (data.bio is string && data.bio.size() <= 500)) &&
-             (!('avatarURL' in data) || (data.avatarURL is string && data.avatarURL.size() <= 1000)) &&
-             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 1000)) &&
-             (!('username' in data) || (data.username is string && data.username.size() <= 30));
+      return (!('name' in data) || (data.name is string && data.name.size() > 0 && data.name.size() < 50)) &&
+             (!('email' in data) || (data.email is string && isValidEmail(data.email))) &&
+             (!('role' in data) || (data.role in ['user', 'admin', 'instructor', 'host', 'seller'])) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 2500)) &&
+             (!('avatarURL' in data) || (data.avatarURL is string && data.avatarURL.size() <= 5000)) &&
+             (!('coverURL' in data) || (data.coverURL is string && data.coverURL.size() <= 5000)) &&
+             (!('username' in data) || (data.username is string && data.username.size() <= 100));
     }
 
     function isValidPost(data) {
@@ -169,7 +169,7 @@ service cloud.firestore {
     }
 
     function isValidChat(data) {
-      return data.participants is list && data.participants.size() == 2 &&
+      return data.participants is list && data.participants.size() >= 2 &&
              data.unreadCount is map &&
              data.pinnedBy is list &&
              data.archivedBy is list;
@@ -178,7 +178,7 @@ service cloud.firestore {
     function isValidMessage(data) {
       return data.chatId is string && data.chatId.size() > 0 &&
              data.senderId is string && data.senderId.size() > 0 &&
-             data.text is string && data.text.size() <= 5000 &&
+             (!('text' in data) || (data.text is string && data.text.size() <= 5000)) &&
              data.type in ['text', 'image', 'video', 'voice', 'file'] &&
              data.status in ['sent', 'delivered', 'read'] &&
              data.deletedFor is list;
@@ -196,9 +196,7 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      // CRITICAL: Users collection contains PII (email, phone, wallet balances).
-      // Read access is restricted to the owner or admin to prevent data leaks.
-      allow read: if isOwner(userId) || isAdmin();
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && 
                     isOwner(userId) && 
                     hasRequiredFields(['uid', 'name', 'email', 'role', 'createdAt']) &&
@@ -209,8 +207,19 @@ service cloud.firestore {
                     isValidUser(request.resource.data) &&
                     uidNotModified() &&
                     (
-                      (isOwner(userId) && request.resource.data.role == resource.data.role) || 
-                      isAdmin()
+                      (isOwner(userId) && !('role' in request.resource.data.diff(resource.data).affectedKeys())) || 
+                      isAdmin() ||
+                      // Allow other users to follow/unfollow
+                      (
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers', 'followersCount']) &&
+                        math.abs(request.resource.data.followersCount - resource.data.get('followersCount', 0)) == 1
+                      ) ||
+                      // Allow user to follow/unfollow others
+                      (
+                        isOwner(userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following', 'followingCount']) &&
+                        math.abs(request.resource.data.followingCount - resource.data.get('followingCount', 0)) == 1
+                      )
                     );
       allow delete: if isAdmin();
     }
@@ -285,7 +294,7 @@ service cloud.firestore {
       allow read: if isAuthenticated() && 
                   (resource == null || request.auth.uid in get(/databases/$(database)/documents/chats/$(resource.data.chatId)).data.participants);
       allow create: if isAuthenticated() && 
-                    hasRequiredFields(['id', 'chatId', 'senderId', 'text', 'type', 'createdAt', 'status', 'deletedFor']) &&
+                    hasRequiredFields(['id', 'chatId', 'senderId', 'type', 'createdAt', 'status', 'deletedFor']) &&
                     isValidMessage(request.resource.data) &&
                     request.resource.data.senderId == request.auth.uid &&
                     request.auth.uid in get(/databases/$(database)/documents/chats/$(request.resource.data.chatId)).data.participants;
@@ -431,5 +440,48 @@ service cloud.firestore {
       allow delete: if isAdmin() || resource.data.sellerId == request.auth.uid;
     }
 
+    match /coupons/{couponId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /couponUsages/{usageId} {
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /bookPurchases/{purchaseId} {
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    
+    match /roleApplications/{applicationId} {
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /moderationLogs/{logId} {
+      allow read, create, update, delete: if isAdmin();
+    }
+
+    match /ramadanTrackers/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create, update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAdmin();
+    }
+
+    match /userActivities/{activityId} {
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.userId || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      allow read: if true; // Or isAuthenticated() depending on if public users need to read settings (usually yes for public settings)
+      allow write: if isAdmin();
+    }
   }
 }

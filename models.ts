@@ -487,7 +487,7 @@ export interface Enrollment {
   courseId: string;
   progress: number;
   completedLessons: string[]; // array of lesson IDs
-  status: 'pending' | 'active' | 'completed';
+  status: 'pending' | 'active' | 'completed' | 'rejected';
   certificateIssued?: boolean;
   certificateUrl?: string;
   enrolledAt: number;

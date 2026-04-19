@@ -37,6 +37,7 @@ export const AdminBookManagement = ({ currentUser }: { currentUser: User }) => {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [previewPdfFile, setPreviewPdfFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [tagsInput, setTagsInput] = useState('');
 
   // Reader Mock State
@@ -78,18 +79,35 @@ export const AdminBookManagement = ({ currentUser }: { currentUser: User }) => {
     }
     
     setUploading(true);
-    const toastId = toast.loading('Uploading assets...');
+    setUploadProgress(0);
+    const toastId = toast.loading('Uploading assets... 0%');
     try {
+      const progressWeights = previewPdfFile ? [0.1, 0.8, 0.1] : [0.2, 0.8];
+      let currentFileIndex = 0;
+
+      const updateProgress = (p: number) => {
+        let base = 0;
+        for(let i=0; i<currentFileIndex; i++){
+           base += progressWeights[i] * 100;
+        }
+        const current = (p / 100) * progressWeights[currentFileIndex] * 100;
+        const total = Math.round(base + current);
+        setUploadProgress(total);
+        toast.loading(`Uploading assets... ${total}%`, { id: toastId });
+      };
+
       // 1. Upload Cover
-      const coverUrl = await uploadMedia(coverFile, `books/covers/${Date.now()}_${coverFile.name}`);
+      const coverUrl = await uploadMedia(coverFile, `books/covers/${Date.now()}_${coverFile.name}`, updateProgress);
+      currentFileIndex++;
       
       // 2. Upload Main PDF (Secure URL logic handled by Firebase Rules ideally, but we store URL)
-      const fileUrl = await uploadMedia(pdfFile, `books/files/${Date.now()}_${pdfFile.name}`);
-      
+      const fileUrl = await uploadMedia(pdfFile, `books/files/${Date.now()}_${pdfFile.name}`, updateProgress);
+      currentFileIndex++;
+
       // 3. Upload Preview PDF (Optional)
       let sampleFileUrl = '';
       if (previewPdfFile) {
-        sampleFileUrl = await uploadMedia(previewPdfFile, `books/samples/${Date.now()}_${previewPdfFile.name}`);
+        sampleFileUrl = await uploadMedia(previewPdfFile, `books/samples/${Date.now()}_${previewPdfFile.name}`, updateProgress);
       }
 
       // 4. Create Document
@@ -115,11 +133,13 @@ export const AdminBookManagement = ({ currentUser }: { currentUser: User }) => {
       // Reset form
       setUploadData({ title: '', author: '', description: '', category: 'General', tags: [], price: 0, isPublished: true, status: 'approved', allowDownload: false });
       setCoverFile(null); setPdfFile(null); setPreviewPdfFile(null); setTagsInput('');
+      setUploadProgress(0);
       setActiveTab('library');
       loadBooks();
       
     } catch (e) {
       toast.error('Failed to upload book', { id: toastId });
+      setUploadProgress(0);
     } finally {
       setUploading(false);
     }
@@ -361,7 +381,16 @@ export const AdminBookManagement = ({ currentUser }: { currentUser: User }) => {
                      </label>
                   </div>
 
-                  <div className="pt-4 flex justify-end">
+                  <div className="pt-4 flex justify-end flex-col sm:flex-row gap-4 items-center">
+                    {uploading && (
+                      <div className="flex-1 w-full flex items-center gap-3">
+                        <div className="text-xs font-bold text-gray-500 whitespace-nowrap">Uploading...</div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2">
+                          <div className="bg-indigo-600 h-2 rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                        </div>
+                        <div className="text-xs font-bold text-gray-700 dark:text-gray-300 w-8">{uploadProgress}%</div>
+                      </div>
+                    )}
                     <Button variant="primary" size="lg" className="w-full md:w-auto" isLoading={uploading} onClick={handleUploadSubmit}>
                       Upload & Publish Book
                     </Button>
