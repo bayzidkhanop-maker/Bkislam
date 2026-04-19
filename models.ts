@@ -263,6 +263,50 @@ export interface Book {
   updatedAt: number;
 }
 
+export interface BookPurchase {
+  id: string;
+  userId: string;
+  bookId: string;
+  amount: number;
+  method: 'Wallet' | 'bKash' | 'Nagad' | 'Free';
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  transactionId?: string;
+  purchasedAt: number;
+  couponCode?: string;
+  discountAmount?: number;
+}
+
+export interface Coupon {
+  id: string; // internal id
+  code: string; // The actual uppercase code
+  type: 'percentage' | 'fixed';
+  value: number;
+  isActive: boolean;
+  startDate: number;
+  expiryDate: number;
+  maxUsesGlobal: number;
+  currentUsesGlobal: number;
+  maxUsesPerUser: number;
+  minPurchaseAmount: number;
+  maxDiscountCap?: number; 
+  applicableProductIds?: string[];
+  applicableCategories?: string[];
+  newUsersOnly: boolean;
+  description: string;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface CouponUsage {
+  id: string;
+  couponId: string;
+  couponCode: string;
+  userId: string;
+  usedAt: number;
+  discountAmount: number;
+  orderId: string; // The ID of the transaction/purchase
+}
+
 export interface PlatformSettings {
   id: string; // usually 'global'
   branding: {
@@ -359,10 +403,14 @@ export interface Call {
 
 export interface Notification {
   id: string;
-  uid: string; // receiver
-  actorUid: string; // who did it
-  type: 'like' | 'comment';
-  postId: string;
+  uid?: string; // receiver
+  userId?: string; // receiver (alias)
+  actorUid?: string; // who did it
+  title?: string;
+  message?: string;
+  link?: string;
+  type: 'like' | 'comment' | 'system' | 'message';
+  postId?: string;
   read: boolean;
   createdAt: number;
 }
@@ -466,4 +514,15 @@ export interface Payment {
   transactionId: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: number;
+}
+
+export interface RamadanTracker {
+  id: string;
+  userId: string;
+  fastingStatus: Record<number, 'completed' | 'missed' | 'pending'>;
+  dailyChecklist: Record<string, boolean>;
+  tasbihCount: number;
+  tasbihGoal: number;
+  selectedZikr: string;
+  updatedAt: number;
 }

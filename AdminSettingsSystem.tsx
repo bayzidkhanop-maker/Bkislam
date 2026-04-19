@@ -102,7 +102,7 @@ export const AdminSettingsSystem = ({ currentUser }: { currentUser: User }) => {
     const toastId = toast.loading('Uploading image...');
     try {
       const url = await uploadMedia(file, `branding/${key}`);
-      updateSection(section, key as any, url);
+      updateSection(section, key as keyof PlatformSettings[typeof section], url);
       toast.success('Image uploaded successfully', { id: toastId });
     } catch (error) {
       toast.error('Failed to upload image', { id: toastId });

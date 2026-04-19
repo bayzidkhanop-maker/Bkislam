@@ -17,7 +17,7 @@ import {
   runTransaction
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult, Notification, Chat, Message, Call, Review, Category } from './models';
+import { Post, Comment, Report, User, Course, CourseModule, Lesson, Enrollment, Payment, Transaction, WithdrawalRequest, Tournament, TournamentRegistration, TournamentMatch, MatchResult, Notification, Chat, Message, Call, Review, Category, UserActivity, RoleApplication, ModerationLog, AutoModSettings, PlatformSettings, Book, BookPurchase, RamadanTracker, Coupon, CouponUsage } from './models';
 import { generateId } from './utils';
 import { handleFirestoreError, OperationType } from './firestoreErrorHandler';
 
@@ -103,10 +103,12 @@ export const reportPost = async (postId: string, reason: string, uid: string): P
   const newReport: Report = {
     id,
     reportedBy: uid,
-    postId,
+    targetType: 'post',
+    targetId: postId,
     reason,
     status: 'pending',
     createdAt: Date.now(),
+    priority: 'low'
   };
   try {
     await setDoc(doc(db, 'reports', id), newReport);
@@ -393,7 +395,7 @@ export const submitAddMoneyRequest = async (
     const transaction: Transaction = {
       id,
       userId,
-      type: 'add_money',
+      type: 'deposit',
       amount,
       status: 'pending',
       method,
@@ -484,8 +486,19 @@ export const getUserWithdrawals = async (userId: string): Promise<WithdrawalRequ
   }
 };
 
-export const purchaseCourseWithWallet = async (userId: string, courseId: string, amount: number): Promise<void> => {
+export const purchaseCourseWithWallet = async (userId: string, courseId: string, amount: number, couponCode?: string): Promise<void> => {
   try {
+    let couponId: string | null = null;
+    let couponValidationResult: any = null;
+
+    if (couponCode) {
+      couponValidationResult = await validateCoupon(couponCode, userId, amount, courseId);
+      if (!couponValidationResult.isValid) {
+         throw new Error(couponValidationResult.error || "Invalid coupon");
+      }
+      couponId = couponValidationResult.coupon.id;
+    }
+
     await runTransaction(db, async (transaction) => {
       const userRef = doc(db, 'users', userId);
       const courseRef = doc(db, 'courses', courseId);
@@ -496,58 +509,103 @@ export const purchaseCourseWithWallet = async (userId: string, courseId: string,
       const courseDoc = await transaction.get(courseRef);
       if (!courseDoc.exists()) throw new Error("Course not found");
 
+      let finalAmount = amount;
+      let appliedDiscount = 0;
+      let couponDoc: any = null;
+      let couponData: any = null;
+
+      if (couponId) {
+         const couponRef = doc(db, 'coupons', couponId);
+         couponDoc = await transaction.get(couponRef);
+         if (couponDoc.exists()) {
+             couponData = couponDoc.data() as Coupon;
+             // Re-validate strictly inside transaction (limits)
+             if (couponData.currentUsesGlobal >= couponData.maxUsesGlobal) throw new Error("Coupon usage limit reached");
+             
+             // Calculate final amount
+             appliedDiscount = couponValidationResult.discountAmount; // use same calc
+             finalAmount = Math.max(0, amount - appliedDiscount);
+         }
+      }
+
       const userData = userDoc.data() as User;
       const courseData = courseDoc.data() as Course;
       const currentBalance = userData.walletBalance || 0;
 
-      if (currentBalance < amount) {
+      if (currentBalance < finalAmount) {
         throw new Error("Insufficient wallet balance");
       }
 
       // Deduct balance from user
-      transaction.update(userRef, { walletBalance: currentBalance - amount });
+      if (finalAmount > 0) {
+        transaction.update(userRef, { walletBalance: currentBalance - finalAmount });
+      }
 
       // Add balance to instructor (assuming 10% platform commission)
       const instructorRef = doc(db, 'users', courseData.instructorId);
       const instructorDoc = await transaction.get(instructorRef);
       if (instructorDoc.exists()) {
         const instructorData = instructorDoc.data() as User;
-        const earnings = amount * 0.9; // 90% to instructor
+        const earnings = finalAmount * 0.9; // 90% to instructor
         transaction.update(instructorRef, {
           walletBalance: (instructorData.walletBalance || 0) + earnings,
           totalEarnings: (instructorData.totalEarnings || 0) + earnings
         });
 
-        // Create Transaction Record for Instructor
-        const instructorTxId = generateId();
-        const instructorTxRef = doc(db, 'transactions', instructorTxId);
-        transaction.set(instructorTxRef, {
-          id: instructorTxId,
-          userId: courseData.instructorId,
-          type: 'course_sale',
-          amount: earnings,
+        if (finalAmount > 0) {
+          // Create Transaction Record for Instructor
+          const instructorTxId = generateId();
+          const instructorTxRef = doc(db, 'transactions', instructorTxId);
+          transaction.set(instructorTxRef, {
+            id: instructorTxId,
+            userId: courseData.instructorId,
+            type: 'course_sale',
+            amount: earnings,
+            status: 'completed',
+            method: 'System',
+            relatedId: courseId,
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          });
+        }
+      }
+
+      // Create Transaction Record for User
+      const txId = generateId();
+      if (finalAmount > 0) {
+        const txRef = doc(db, 'transactions', txId);
+        transaction.set(txRef, {
+          id: txId,
+          userId,
+          type: 'course_purchase',
+          amount: finalAmount,
           status: 'completed',
-          method: 'System',
+          method: 'Wallet',
           relatedId: courseId,
+          couponCode: couponData?.code,
+          discountAmount: appliedDiscount,
           createdAt: Date.now(),
           updatedAt: Date.now()
         });
       }
 
-      // Create Transaction Record for User
-      const txId = generateId();
-      const txRef = doc(db, 'transactions', txId);
-      transaction.set(txRef, {
-        id: txId,
-        userId,
-        type: 'course_purchase',
-        amount,
-        status: 'completed',
-        method: 'Wallet',
-        relatedId: courseId,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      });
+      // Update Coupon Uses
+      if (couponId && couponData) {
+        const couponRef = doc(db, 'coupons', couponId);
+        transaction.update(couponRef, { currentUsesGlobal: increment(1) });
+        
+        const usageId = generateId();
+        const usageRef = doc(db, 'couponUsages', usageId);
+        transaction.set(usageRef, {
+          id: usageId,
+          couponId,
+          couponCode: couponData.code,
+          userId,
+          usedAt: Date.now(),
+          discountAmount: appliedDiscount,
+          orderId: txId
+        });
+      }
 
       // Create Enrollment
       const enrollmentId = generateId();
@@ -569,9 +627,9 @@ export const purchaseCourseWithWallet = async (userId: string, courseId: string,
         id: paymentId,
         userId,
         courseId,
-        amount,
-        method: 'Wallet',
-        transactionId: txId,
+        amount: finalAmount,
+        method: finalAmount === 0 ? 'Free' : 'Wallet',
+        transactionId: finalAmount > 0 ? txId : undefined,
         status: 'approved',
         createdAt: Date.now()
       });
@@ -1035,7 +1093,7 @@ export const seedDummyCourses = async (instructorId: string, instructorName: str
       rating: 4.8,
       totalReviews: 124,
       studentsCount: 1050,
-      published: true,
+      status: 'published',
       createdAt: Date.now()
     };
     await setDoc(doc(db, 'courses', courseId), course);
@@ -1155,6 +1213,137 @@ export const deleteTournament = async (id: string): Promise<void> => {
     await deleteDoc(doc(db, 'tournaments', id));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `tournaments/${id}`);
+    throw error;
+  }
+};
+
+export const purchaseTournamentWithWallet = async (tournamentId: string, userId: string, inGameUid: string, inGameName: string, couponCode?: string): Promise<void> => {
+  try {
+    let couponId: string | null = null;
+    let couponValidationResult: any = null;
+
+    if (couponCode) {
+      const tDoc = await getDoc(doc(db, 'tournaments', tournamentId));
+      if(!tDoc.exists()) throw new Error("Tournament not found");
+      const tData = tDoc.data() as Tournament;
+
+      couponValidationResult = await validateCoupon(couponCode, userId, tData.entryFee, tournamentId);
+      if (!couponValidationResult.isValid) {
+         throw new Error(couponValidationResult.error || "Invalid coupon");
+      }
+      couponId = couponValidationResult.coupon.id;
+    }
+
+    await runTransaction(db, async (transaction) => {
+      const userRef = doc(db, 'users', userId);
+      const tournamentRef = doc(db, 'tournaments', tournamentId);
+      
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists()) throw new Error("User not found");
+      
+      const tournamentDoc = await transaction.get(tournamentRef);
+      if (!tournamentDoc.exists()) throw new Error("Tournament not found");
+
+      let finalAmount = tournamentDoc.data()?.entryFee || 0;
+      let appliedDiscount = 0;
+      let couponDoc: any = null;
+      let couponData: any = null;
+
+      if (couponId) {
+         const couponRef = doc(db, 'coupons', couponId);
+         couponDoc = await transaction.get(couponRef);
+         if (couponDoc.exists()) {
+             couponData = couponDoc.data() as Coupon;
+             if (couponData.currentUsesGlobal >= couponData.maxUsesGlobal) throw new Error("Coupon usage limit reached");
+             
+             appliedDiscount = couponValidationResult.discountAmount; 
+             finalAmount = Math.max(0, finalAmount - appliedDiscount);
+         }
+      }
+
+      const userData = userDoc.data() as User;
+      const tournamentData = tournamentDoc.data() as Tournament;
+      const currentBalance = userData.walletBalance || 0;
+
+      if (finalAmount > 0 && currentBalance < finalAmount) {
+        throw new Error("Insufficient wallet balance");
+      }
+
+      if (finalAmount > 0) {
+        // Deduct balance from user
+        transaction.update(userRef, { walletBalance: currentBalance - finalAmount });
+
+        // Add balance to host
+        const hostRef = doc(db, 'users', tournamentData.hostId);
+        const hostDoc = await transaction.get(hostRef);
+        if (hostDoc.exists()) {
+          const hostData = hostDoc.data() as User;
+          const earnings = finalAmount * 0.9;
+          transaction.update(hostRef, {
+            walletBalance: (hostData.walletBalance || 0) + earnings,
+          });
+        }
+      }
+
+      const txId = generateId();
+
+      // Create Registration
+      const regId = generateId();
+      const newRegistration: TournamentRegistration = {
+        id: regId,
+        tournamentId,
+        userId,
+        inGameUid,
+        inGameName,
+        paymentStatus: finalAmount === 0 ? 'free' : 'verified',
+        transactionId: finalAmount > 0 ? txId : undefined,
+        status: 'approved',
+        createdAt: Date.now(),
+      };
+      const regRef = doc(db, 'tournamentRegistrations', regId);
+      transaction.set(regRef, newRegistration);
+
+      // Create Transaction Record for User
+      if (finalAmount > 0) {
+        const txRef = doc(db, 'transactions', txId);
+        transaction.set(txRef, {
+          id: txId,
+          userId,
+          type: 'tournament_registration',
+          amount: finalAmount,
+          status: 'completed',
+          method: 'Wallet',
+          relatedId: tournamentId,
+          couponCode: couponData?.code,
+          discountAmount: appliedDiscount,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
+
+      // Update Coupon Uses
+      if (couponId && couponData) {
+        const couponRef = doc(db, 'coupons', couponId);
+        transaction.update(couponRef, { currentUsesGlobal: increment(1) });
+        
+        const usageId = generateId();
+        const usageRef = doc(db, 'couponUsages', usageId);
+        transaction.set(usageRef, {
+          id: usageId,
+          couponId,
+          couponCode: couponData.code,
+          userId,
+          usedAt: Date.now(),
+          discountAmount: appliedDiscount,
+          orderId: finalAmount > 0 ? txId : regId
+        });
+      }
+
+      // Increment registeredCount
+      transaction.update(tournamentRef, { registeredCount: increment(1) });
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `tournaments/${tournamentId}`);
     throw error;
   }
 };
@@ -1809,5 +1998,299 @@ export const deleteBook = async (id: string): Promise<void> => {
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `books/${id}`);
     throw error;
+  }
+};
+
+export const purchaseBookWithWallet = async (bookId: string, userId: string, couponCode?: string): Promise<void> => {
+  try {
+    let couponId: string | null = null;
+    let couponValidationResult: any = null;
+
+    if (couponCode) {
+      const bDoc = await getDoc(doc(db, 'books', bookId));
+      if(!bDoc.exists()) throw new Error("Book not found");
+      const bData = bDoc.data() as Book;
+
+      couponValidationResult = await validateCoupon(couponCode, userId, bData.price, bookId, bData.category);
+      if (!couponValidationResult.isValid) {
+         throw new Error(couponValidationResult.error || "Invalid coupon");
+      }
+      couponId = couponValidationResult.coupon.id;
+    }
+
+    await runTransaction(db, async (transaction) => {
+      const userRef = doc(db, 'users', userId);
+      const bookRef = doc(db, 'books', bookId);
+      
+      const userDoc = await transaction.get(userRef);
+      if (!userDoc.exists()) throw new Error("User not found");
+      
+      const bookDoc = await transaction.get(bookRef);
+      if (!bookDoc.exists()) throw new Error("Book not found");
+
+      let finalAmount = bookDoc.data()?.price || 0;
+      let appliedDiscount = 0;
+      let couponDoc: any = null;
+      let couponData: any = null;
+
+      if (couponId) {
+         const couponRef = doc(db, 'coupons', couponId);
+         couponDoc = await transaction.get(couponRef);
+         if (couponDoc.exists()) {
+             couponData = couponDoc.data() as Coupon;
+             if (couponData.currentUsesGlobal >= couponData.maxUsesGlobal) throw new Error("Coupon usage limit reached");
+             
+             appliedDiscount = couponValidationResult.discountAmount; 
+             finalAmount = Math.max(0, finalAmount - appliedDiscount);
+         }
+      }
+
+      const userData = userDoc.data() as User;
+      const bookData = bookDoc.data() as Book;
+      const currentBalance = userData.walletBalance || 0;
+
+      if (finalAmount > 0 && currentBalance < finalAmount) {
+        throw new Error("Insufficient wallet balance");
+      }
+
+      if (finalAmount > 0) {
+        // Deduct balance from user
+        transaction.update(userRef, { walletBalance: currentBalance - finalAmount });
+
+        // Add balance to seller (assuming 90% goes to seller)
+        const sellerRef = doc(db, 'users', bookData.sellerId);
+        const sellerDoc = await transaction.get(sellerRef);
+        if (sellerDoc.exists()) {
+          const sellerData = sellerDoc.data() as User;
+          const earnings = finalAmount * 0.9;
+          transaction.update(sellerRef, {
+            walletBalance: (sellerData.walletBalance || 0) + earnings,
+          });
+        }
+      }
+
+      const txId = generateId();
+
+      // Record Purchase
+      const purchaseId = generateId();
+      const newPurchase: BookPurchase = {
+        id: purchaseId,
+        userId,
+        bookId,
+        amount: finalAmount,
+        method: finalAmount === 0 ? 'Free' : 'Wallet',
+        status: 'completed',
+        transactionId: finalAmount > 0 ? txId : undefined,
+        couponCode: couponData?.code,
+        discountAmount: appliedDiscount,
+        purchasedAt: Date.now()
+      };
+      const purchaseRef = doc(db, 'bookPurchases', purchaseId);
+      transaction.set(purchaseRef, newPurchase);
+
+      // Create Transaction Record for User
+      if (finalAmount > 0) {
+        const txRef = doc(db, 'transactions', txId);
+        transaction.set(txRef, {
+          id: txId,
+          userId,
+          type: 'course_purchase', // Or maybe 'book_purchase'. We need book_purchase in types? Assuming 'course_purchase' or new. Let's use 'deposit' maybe? No, 'course_purchase' works to deduct.
+          amount: finalAmount,
+          status: 'completed',
+          method: 'Wallet',
+          relatedId: bookId,
+          couponCode: couponData?.code,
+          discountAmount: appliedDiscount,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        });
+      }
+
+      // Update Coupon Uses
+      if (couponId && couponData) {
+        const couponRef = doc(db, 'coupons', couponId);
+        transaction.update(couponRef, { currentUsesGlobal: increment(1) });
+        
+        const usageId = generateId();
+        const usageRef = doc(db, 'couponUsages', usageId);
+        transaction.set(usageRef, {
+          id: usageId,
+          couponId,
+          couponCode: couponData.code,
+          userId,
+          usedAt: Date.now(),
+          discountAmount: appliedDiscount,
+          orderId: finalAmount > 0 ? txId : purchaseId
+        });
+      }
+
+      // Increment stats
+      transaction.update(bookRef, { 
+        totalSales: increment(1),
+        totalDownloads: increment(1) 
+      });
+    });
+
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `books/${bookId}`);
+    throw error;
+  }
+};
+
+export const getBookPurchase = async (userId: string, bookId: string): Promise<BookPurchase | null> => {
+  try {
+    const q = query(collection(db, 'bookPurchases'), where('userId', '==', userId), where('bookId', '==', bookId), limit(1));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      return snapshot.docs[0].data() as BookPurchase;
+    }
+    return null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `bookPurchases`);
+    throw error;
+  }
+};
+
+// --- RAMADAN TRACKER ---
+
+export const getRamadanTracker = async (userId: string): Promise<RamadanTracker | null> => {
+  try {
+    const docSnap = await getDoc(doc(db, 'ramadanTrackers', userId));
+    return docSnap.exists() ? (docSnap.data() as RamadanTracker) : null;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `ramadanTrackers/${userId}`);
+    throw error;
+  }
+};
+
+export const updateRamadanTracker = async (userId: string, data: Partial<RamadanTracker>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'ramadanTrackers', userId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      await updateDoc(docRef, { ...data, updatedAt: Date.now() });
+    } else {
+      await setDoc(docRef, {
+        id: userId,
+        userId,
+        fastingStatus: {},
+        dailyChecklist: {},
+        tasbihCount: 0,
+        tasbihGoal: 33,
+        selectedZikr: 'Subhanallah',
+        ...data,
+        updatedAt: Date.now()
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `ramadanTrackers/${userId}`);
+    throw error;
+  }
+};
+
+// --- COUPON SYSTEM ---
+
+export const createCoupon = async (couponData: Omit<Coupon, 'id' | 'createdAt' | 'currentUsesGlobal'>): Promise<void> => {
+  try {
+    const code = couponData.code.trim().toUpperCase();
+    const q = query(collection(db, 'coupons'), where('code', '==', code));
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) throw new Error("Coupon code already exists");
+
+    const id = generateId();
+    const newCoupon: Coupon = {
+      ...couponData,
+      id,
+      code,
+      currentUsesGlobal: 0,
+      createdAt: Date.now()
+    };
+    await setDoc(doc(db, 'coupons', id), newCoupon);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, 'coupons');
+    throw error;
+  }
+};
+
+export const updateCoupon = async (id: string, updates: Partial<Coupon>): Promise<void> => {
+  try {
+    const docRef = doc(db, 'coupons', id);
+    await updateDoc(docRef, updates);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `coupons/${id}`);
+    throw error;
+  }
+}
+
+export const getCoupons = async (): Promise<Coupon[]> => {
+  try {
+    const q = query(collection(db, 'coupons'), orderBy('createdAt', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => doc.data() as Coupon);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'coupons');
+    throw error;
+  }
+};
+
+export const deleteCoupon = async (id: string): Promise<void> => {
+  try {
+    await deleteDoc(doc(db, 'coupons', id));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `coupons/${id}`);
+    throw error;
+  }
+};
+
+export const validateCoupon = async (code: string, userId: string, purchaseAmount: number, productId: string, categoryId?: string): Promise<{ isValid: boolean; discountAmount: number; error?: string; coupon?: Coupon }> => {
+  try {
+    const q = query(collection(db, 'coupons'), where('code', '==', code.toUpperCase()), limit(1));
+    const snapshot = await getDocs(q);
+    if (snapshot.empty) return { isValid: false, discountAmount: 0, error: 'Invalid coupon code' };
+    
+    const coupon = snapshot.docs[0].data() as Coupon;
+    const now = Date.now();
+
+    if (!coupon.isActive) return { isValid: false, discountAmount: 0, error: 'Coupon is not active' };
+    if (now < coupon.startDate) return { isValid: false, discountAmount: 0, error: 'Coupon is not yet active' };
+    if (now > coupon.expiryDate) return { isValid: false, discountAmount: 0, error: 'Coupon has expired' };
+    if (coupon.currentUsesGlobal >= coupon.maxUsesGlobal) return { isValid: false, discountAmount: 0, error: 'Coupon usage limit reached' };
+    if (purchaseAmount < coupon.minPurchaseAmount) return { isValid: false, discountAmount: 0, error: `Minimum purchase amount is ৳${coupon.minPurchaseAmount}` };
+    
+    // Product restriction
+    if (coupon.applicableProductIds && coupon.applicableProductIds.length > 0) {
+      if (!coupon.applicableProductIds.includes(productId)) return { isValid: false, discountAmount: 0, error: 'Coupon is not applicable for this product' };
+    }
+    
+    // Category restriction
+    if (coupon.applicableCategories && coupon.applicableCategories.length > 0 && categoryId) {
+      if (!coupon.applicableCategories.includes(categoryId)) return { isValid: false, discountAmount: 0, error: 'Coupon is not applicable for this category' };
+    }
+
+    // Check user usages
+    const usageQ = query(collection(db, 'couponUsages'), where('couponId', '==', coupon.id), where('userId', '==', userId));
+    const usageSnap = await getDocs(usageQ);
+    if (usageSnap.size >= coupon.maxUsesPerUser) return { isValid: false, discountAmount: 0, error: `You have reached the maximum usage limit for this coupon` };
+
+    // New users only check (simplified: if they have any purchase, they are not new)
+    if (coupon.newUsersOnly) {
+       const txQ = query(collection(db, 'transactions'), where('userId', '==', userId), limit(1));
+       const txSnap = await getDocs(txQ);
+       if (!txSnap.empty) return { isValid: false, discountAmount: 0, error: 'This coupon is for new users only.' };
+    }
+
+    let discount = 0;
+    if (coupon.type === 'fixed') {
+      discount = Math.min(coupon.value, purchaseAmount);
+    } else {
+      discount = (purchaseAmount * coupon.value) / 100;
+      if (coupon.maxDiscountCap && coupon.maxDiscountCap > 0) {
+        discount = Math.min(discount, coupon.maxDiscountCap);
+      }
+    }
+
+    return { isValid: true, discountAmount: discount, coupon };
+  } catch (error) {
+    return { isValid: false, discountAmount: 0, error: 'Error validating coupon' };
   }
 };

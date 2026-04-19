@@ -33,7 +33,7 @@ export const CourseDashboardPage = ({ currentUser }: { currentUser: User }) => {
             allEnrollments.push({
               ...enr,
               courseTitle: course.title,
-              studentName: studentProfile?.displayName || 'Unknown',
+              studentName: studentProfile?.name || 'Unknown',
               studentEmail: studentProfile?.email || 'Unknown',
             });
           }

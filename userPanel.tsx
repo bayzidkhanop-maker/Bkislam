@@ -95,12 +95,12 @@ export const UserPanel = ({ user }: { user: User }) => {
               
               <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-3">
                 <img 
-                  src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=random`} 
+                  src={user.avatarURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=random`} 
                   alt="Profile" 
                   className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-gray-700"
                 />
                 <div>
-                  <p className="font-bold text-gray-900 dark:text-white text-sm">{user.displayName}</p>
+                  <p className="font-bold text-gray-900 dark:text-white text-sm">{user.name}</p>
                   <p className="text-xs text-gray-500">{user.email}</p>
                 </div>
               </div>

@@ -249,9 +249,13 @@ export const WalletPage = ({ currentUser }: { currentUser: User }) => {
                   >Nagad</button>
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-700 border border-gray-100">
-                  <p className="mb-2">Send money to this {addMethod} Personal number:</p>
-                  <p className="text-xl font-extrabold text-gray-900 tracking-wider">017XX-XXXXXX</p>
+                <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-xl text-sm text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800/30">
+                  <p className="font-bold mb-2">Instructions:</p>
+                  <ol className="list-decimal pl-4 space-y-1">
+                    <li>Send money to our {addMethod} Personal number: <strong className="text-gray-900 dark:text-white font-mono bg-white dark:bg-gray-800 px-1 py-0.5 rounded ml-1">017XX-XXXXXX</strong></li>
+                    <li>Use the "Send Money" option.</li>
+                    <li>Save the Transaction ID and enter it below.</li>
+                  </ol>
                 </div>
 
                 <div>

@@ -14,7 +14,7 @@ import {
 } from './firestoreService';
 
 export const AdminFinancialSystem = ({ currentUser }: { currentUser: User }) => {
-  const [activeTab, setActiveTab] = useState<'ledger' | 'payments' | 'withdrawals' | 'analytics'>('ledger');
+  const [activeTab, setActiveTab] = useState<'ledger' | 'payments' | 'withdrawals' | 'analytics' | 'coupons'>('ledger');
   
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
@@ -125,7 +125,7 @@ export const AdminFinancialSystem = ({ currentUser }: { currentUser: User }) => 
   };
 
   // KPIs
-  const totalRevenue = transactions.filter(t => t.status === 'completed' && t.type !== 'withdrawal').reduce((sum, t) => sum + t.amount, 0);
+  const totalRevenue = transactions.filter(t => (t.status === 'completed' || t.status === 'approved') && t.type !== 'withdrawal').reduce((sum, t) => sum + t.amount, 0);
   const pendingTxs = transactions.filter(t => t.status === 'pending').length;
   const pendingWts = withdrawals.filter(w => w.status === 'pending').length;
   const totalPaidOut = withdrawals.filter(w => w.status === 'approved' || w.status === 'completed').reduce((sum, w) => sum + w.amount, 0);
@@ -174,7 +174,7 @@ export const AdminFinancialSystem = ({ currentUser }: { currentUser: User }) => 
         </Card>
       </div>
 
-      <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-max">
+      <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl flex-wrap gap-1 w-fit">
         <button 
           onClick={() => setActiveTab('ledger')}
           className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${activeTab === 'ledger' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}
@@ -194,6 +194,12 @@ export const AdminFinancialSystem = ({ currentUser }: { currentUser: User }) => 
         >
           Payouts
           {pendingWts > 0 && <span className="bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingWts}</span>}
+        </button>
+        <button 
+          onClick={() => setActiveTab('coupons')}
+          className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2 ${activeTab === 'coupons' ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          Coupons
         </button>
       </div>
 
@@ -421,6 +427,194 @@ export const AdminFinancialSystem = ({ currentUser }: { currentUser: User }) => 
         </div>
       )}
 
+      {activeTab === 'coupons' && <AdminCouponsTab />}
+    </div>
+  );
+};
+
+import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Coupon } from './models';
+import { getCoupons, createCoupon, deleteCoupon, updateCoupon } from './firestoreService';
+
+const AdminCouponsTab = () => {
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  
+  const [editingId, setEditingId] = useState('');
+  const [formData, setFormData] = useState<Partial<Coupon>>({
+    code: '',
+    type: 'percentage',
+    value: 0,
+    isActive: true,
+    maxUsesGlobal: 100,
+    maxUsesPerUser: 1,
+    minPurchaseAmount: 0,
+  });
+
+  const loadCoupons = async () => {
+    setLoading(true);
+    try {
+      const data = await getCoupons();
+      setCoupons(data);
+    } catch (e) {
+      toast.error('Failed to load coupons');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCoupons();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.code || !formData.value) return;
+
+    try {
+      if (editingId) {
+        await updateCoupon(editingId, formData);
+        toast.success('Coupon updated');
+      } else {
+        await createCoupon({
+          ...formData as unknown as Omit<Coupon, 'id' | 'createdAt' | 'currentUsesGlobal'>,
+          startDate: formData.startDate || Date.now(),
+          expiryDate: formData.expiryDate || Date.now() + 30 * 86400000,
+        });
+        toast.success('Coupon created');
+      }
+      setShowModal(false);
+      setEditingId('');
+      loadCoupons();
+    } catch (e: any) {
+      toast.error(e.message || 'Error saving coupon');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this coupon?')) return;
+    try {
+      await deleteCoupon(id);
+      toast.success('Coupon deleted');
+      loadCoupons();
+    } catch (e) {
+      toast.error('Failed to delete coupon');
+    }
+  };
+
+  const openNew = () => {
+    setEditingId('');
+    setFormData({
+      code: '',
+      type: 'percentage',
+      value: 0,
+      isActive: true,
+      maxUsesGlobal: 100,
+      maxUsesPerUser: 1,
+      minPurchaseAmount: 0,
+      startDate: Date.now(),
+      expiryDate: Date.now() + 30 * 86400000,
+    });
+    setShowModal(true);
+  };
+
+  if (loading) return <Loader />;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm">
+        <h2 className="text-xl font-bold">Manage Coupons</h2>
+        <Button onClick={openNew} className="flex items-center gap-2"><Plus size={16}/> New Coupon</Button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+        <table className="w-full text-left text-sm whitespace-nowrap">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              <th className="p-4 font-semibold text-gray-600">Code</th>
+              <th className="p-4 font-semibold text-gray-600">Value</th>
+              <th className="p-4 font-semibold text-gray-600">Uses</th>
+              <th className="p-4 font-semibold text-gray-600">Expiry</th>
+              <th className="p-4 font-semibold text-gray-600">Status</th>
+              <th className="p-4 font-semibold text-gray-600 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {coupons.map((c) => (
+              <tr key={c.id} className="border-b last:border-0 hover:bg-gray-50">
+                <td className="p-4 font-bold text-indigo-600">{c.code}</td>
+                <td className="p-4">{c.type === 'percentage' ? `${c.value}%` : `৳${c.value}`}</td>
+                <td className="p-4">{c.currentUsesGlobal} / {c.maxUsesGlobal}</td>
+                <td className="p-4">{format(c.expiryDate, 'dd MMM yyyy')}</td>
+                <td className="p-4">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {c.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td className="p-4 text-right">
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => { setEditingId(c.id); setFormData(c); setShowModal(true); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit2 size={16}/></button>
+                    <button onClick={() => handleDelete(c.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={16}/></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {coupons.length === 0 && <div className="p-8 text-center text-gray-500">No coupons found.</div>}
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-lg p-6 my-8 shadow-xl">
+            <h3 className="text-xl font-bold mb-4">{editingId ? 'Edit Coupon' : 'Create Coupon'}</h3>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium mb-1">Coupon Code</label>
+                  <Input required value={formData.code} onChange={e => setFormData({...formData, code: e.target.value.toUpperCase()})} placeholder="e.g. SUMMER50" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Type</label>
+                  <select className="w-full border rounded-lg p-2" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as 'percentage'|'fixed'})}>
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (৳)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Value</label>
+                  <Input type="number" required min={1} value={formData.value} onChange={e => setFormData({...formData, value: Number(e.target.value)})} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium mb-1">Max Discount Cap (For % coupons only, 0 for unlimited)</label>
+                  <Input type="number" value={formData.maxDiscountCap || 0} onChange={e => setFormData({...formData, maxDiscountCap: Number(e.target.value)})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Global Limit (Total uses)</label>
+                  <Input type="number" required min={1} value={formData.maxUsesGlobal} onChange={e => setFormData({...formData, maxUsesGlobal: Number(e.target.value)})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Per User Limit</label>
+                  <Input type="number" required min={1} value={formData.maxUsesPerUser} onChange={e => setFormData({...formData, maxUsesPerUser: Number(e.target.value)})} />
+                </div>
+                <div className="col-span-2 flex items-center gap-2 mt-2">
+                  <input type="checkbox" id="isActive" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} className="w-4 h-4"/>
+                  <label htmlFor="isActive" className="font-medium">Active (Can be used immediately if dates match)</label>
+                </div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <input type="checkbox" id="newUsersOnly" checked={formData.newUsersOnly || false} onChange={e => setFormData({...formData, newUsersOnly: e.target.checked})} className="w-4 h-4"/>
+                  <label htmlFor="newUsersOnly" className="font-medium text-amber-600">New Users Only (No previous transactions)</label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t mt-6">
+                <Button variant="ghost" type="button" onClick={() => setShowModal(false)}>Cancel</Button>
+                <Button type="submit">Save Coupon</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -131,11 +131,14 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
 );
 Input.displayName = 'Input';
 
-export const Loader = ({ className }: { className?: string }) => (
-  <div className={cn("flex justify-center items-center p-4", className)}>
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 border-t-transparent"></div>
-  </div>
-);
+export const Loader = ({ className, size = "md" }: { className?: string, size?: "sm" | "md" | "lg" }) => {
+  const sizeClass = { sm: "h-4 w-4", md: "h-8 w-8", lg: "h-12 w-12" }[size];
+  return (
+    <div className={cn("flex justify-center items-center p-4", className)}>
+      <div className={cn(`animate-spin rounded-full border-b-2 border-indigo-600 border-t-transparent`, sizeClass)}></div>
+    </div>
+  );
+};
 
 export const Modal = ({ isOpen, onClose, children, title }: any) => {
   if (!isOpen) return null;

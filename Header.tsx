@@ -493,7 +493,7 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                   className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                   <img 
-                    src={user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}&background=random`} 
+                    src={user.avatarURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=random`} 
                     alt="Profile" 
                     className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-gray-700"
                   />
@@ -509,7 +509,7 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                       className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-100 dark:border-gray-700 overflow-hidden z-50"
                     >
                       <div className="p-4 border-b border-gray-100 dark:border-gray-700">
-                        <p className="font-bold text-gray-900 dark:text-white truncate">{user.displayName}</p>
+                        <p className="font-bold text-gray-900 dark:text-white truncate">{user.name}</p>
                         <p className="text-xs text-gray-500 truncate">{user.email}</p>
                         <div className="mt-2 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800">
                           {user.role}
@@ -522,7 +522,7 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                         <Link to="/courses" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors">
                           <BookOpen size={16} /> My Courses
                         </Link>
-                        {(user.role === 'admin' || user.role === 'teacher') && (
+                        {(user.role === 'admin' || user.role === 'instructor') && (
                           <Link to="/course-dashboard" className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors">
                             <BookOpen size={16} /> Course Dashboard
                           </Link>

@@ -494,7 +494,7 @@ export const AdminBookManagement = ({ currentUser }: { currentUser: User }) => {
                          <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono">Page {readerPage}</span>
                          <Button variant="ghost" size="sm" onClick={() => setReaderPage(readerPage + 1)}>Next Page</Button>
                        </div>
-                       <Shield className="text-green-500" size={16} title="Secure Web Viewer Mode"/>
+                       <Shield className="text-green-500" size={16} />
                     </div>
                     {/* Native Object tag as a basic secure fallback if iframe/pdfjs is complex in env. Ideal world: PDF.js */}
                     <div className="flex-1 w-full h-[600px] overflow-hidden relative group">

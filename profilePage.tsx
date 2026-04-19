@@ -10,7 +10,7 @@ import {
   User as UserIcon, Gamepad2, GraduationCap, Wallet, Shield, Settings,
   CheckCircle2, MapPin, Globe, Facebook, Youtube, Twitch, Trophy, Target,
   Crosshair, Medal, CreditCard, History, Bell, Moon, Sun, Lock, Smartphone,
-  LogOut, Trash2, Camera, UploadCloud, Share2, Phone, Archive, HardDrive
+  LogOut, Trash2, Camera, UploadCloud, Share2, Phone, Archive, HardDrive, Users, Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -257,7 +257,7 @@ export const ProfilePage = () => {
                   className="rounded-full w-10 h-10 p-0 flex items-center justify-center"
                   onClick={() => {
                     if (currentUser && user) {
-                      startCall(currentUser.uid, user.uid, 'audio');
+                      startCall(currentUser.uid, user.uid, 'audio', () => {});
                     }
                   }}
                 >
@@ -268,7 +268,7 @@ export const ProfilePage = () => {
                   className="rounded-full w-10 h-10 p-0 flex items-center justify-center"
                   onClick={() => {
                     if (currentUser && user) {
-                      startCall(currentUser.uid, user.uid, 'video');
+                      startCall(currentUser.uid, user.uid, 'video', () => {});
                     }
                   }}
                 >
@@ -554,7 +554,7 @@ const CoursesTab = ({ user }: { user: User }) => {
                 <div className="p-4 flex-1 flex flex-col">
                   <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{course.title}</h3>
                   <div className="mt-auto flex items-center justify-between text-sm text-gray-500">
-                    <span className="flex items-center gap-1"><Users size={14} /> {course.studentCount || 0}</span>
+                    <span className="flex items-center gap-1"><Users size={14} /> {course.studentsCount || 0}</span>
                     <span className="flex items-center gap-1"><Star size={14} className="text-amber-400" /> {course.rating?.toFixed(1) || 'N/A'}</span>
                   </div>
                 </div>
@@ -614,7 +614,7 @@ const TournamentsTab = ({ user }: { user: User }) => {
                 <div className="p-4 flex-1 flex flex-col">
                   <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{tournament.title}</h3>
                   <div className="mt-auto flex items-center justify-between text-sm text-gray-500">
-                    <span className="flex items-center gap-1"><Users size={14} /> {tournament.registeredCount}/{tournament.maxParticipants}</span>
+                    <span className="flex items-center gap-1"><Users size={14} /> {tournament.registeredCount}/{tournament.maxPlayers}</span>
                     <span className="font-bold text-indigo-600">৳ {tournament.prizePool}</span>
                   </div>
                 </div>

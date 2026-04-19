@@ -247,7 +247,7 @@ export const AdminPanel = ({ currentUser }: { currentUser: User }) => {
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
             <div className="flex items-center gap-2">
-              <img src={currentUser?.photoURL || `https://ui-avatars.com/api/?name=${currentUser?.displayName}`} alt="Admin" className="w-8 h-8 rounded-full" />
+              <img src={currentUser?.avatarURL || `https://ui-avatars.com/api/?name=${currentUser?.name}`} alt="Admin" className="w-8 h-8 rounded-full" />
             </div>
           </div>
         </header>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Trophy, Users, Calendar, ChevronRight, AlertCircle, CheckCircle, Clock, Shield, Play, List, User as UserIcon } from 'lucide-react';
 import { motion } from 'motion/react';
-import { getTournament, getTournamentRegistrations, registerForTournament } from './firestoreService';
+import { getTournament, getTournamentRegistrations, registerForTournament, purchaseTournamentWithWallet, validateCoupon } from './firestoreService';
 import { Tournament, TournamentRegistration, TournamentMatch, MatchResult, User } from './models';
 import { cn, Button } from './widgets';
 import { toast } from 'sonner';
@@ -24,6 +24,12 @@ export const TournamentDetailsPage = ({ currentUser }: { currentUser: User }) =>
   const [inGameUid, setInGameUid] = useState('');
   const [inGameName, setInGameName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState('');
 
   useEffect(() => {
     if (!id) return;
@@ -86,33 +92,65 @@ export const TournamentDetailsPage = ({ currentUser }: { currentUser: User }) =>
     };
   }, [id, navigate]);
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim() || !user || !tournament) return;
+    setValidatingCoupon(true);
+    setCouponError('');
+    try {
+      const res = await validateCoupon(couponCode, user.uid, tournament.entryFee, tournament.id, tournament.game);
+      if (res.isValid && res.coupon) {
+        setAppliedCoupon({ code: res.coupon.code, discountAmount: res.discountAmount });
+        toast.success(`Coupon applied! You saved ৳${res.discountAmount}`);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.error || 'Invalid coupon');
+        toast.error(res.error || 'Invalid coupon');
+      }
+    } catch (e: any) {
+      setCouponError('Error validating coupon');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !tournament) return;
     
-    if (user.walletBalance! < tournament.entryFee) {
+    let finalAmount = tournament.entryFee;
+    if (appliedCoupon) {
+      finalAmount = Math.max(0, finalAmount - appliedCoupon.discountAmount);
+    }
+
+    if (finalAmount > 0 && (user.walletBalance || 0) < finalAmount) {
       toast.error("Insufficient wallet balance. Please add money.");
       return;
     }
 
     setIsJoining(true);
+    const toastId = toast.loading('Registering...');
     try {
-      await registerForTournament({
-        tournamentId: tournament.id,
-        userId: user.uid,
-        inGameUid,
-        inGameName,
-        paymentStatus: tournament.entryFee === 0 ? 'free' : 'verified', // Assuming auto-deduct logic handles wallet deduction elsewhere or we need to add it here.
-        // For a complete system, we should deduct wallet balance here using a transaction.
-      });
-      toast.success("Successfully registered for the tournament!");
+      if (tournament.entryFee > 0) {
+        await purchaseTournamentWithWallet(tournament.id, user.uid, inGameUid, inGameName, appliedCoupon?.code);
+        toast.success("Payment successful! You're registered.", { id: toastId });
+      } else {
+        await registerForTournament({
+          tournamentId: tournament.id,
+          userId: user.uid,
+          inGameUid,
+          inGameName,
+          paymentStatus: 'free',
+        });
+        toast.success("Successfully registered for the free tournament!", { id: toastId });
+      }
+      
       setShowJoinModal(false);
       // Refresh registrations
       const rData = await getTournamentRegistrations(tournament.id);
       setRegistrations(rData);
       setTournament(prev => prev ? { ...prev, registeredCount: prev.registeredCount + 1 } : null);
     } catch (error: any) {
-      toast.error(error.message || "Failed to register");
+      toast.error(error.message || "Failed to register", { id: toastId });
     } finally {
       setIsJoining(false);
     }
@@ -355,11 +393,42 @@ export const TournamentDetailsPage = ({ currentUser }: { currentUser: User }) =>
 
             <div className="mb-6 p-4 bg-indigo-900/30 border border-indigo-500/30 rounded-lg">
               <p className="text-sm text-indigo-200 mb-1">Entry Fee</p>
-              <p className="text-2xl font-bold text-white">৳ {tournament.entryFee}</p>
+              <p className="text-2xl font-bold text-white">
+                ৳ {appliedCoupon ? Math.max(0, tournament.entryFee - appliedCoupon.discountAmount) : tournament.entryFee}
+              </p>
+              {appliedCoupon && (
+                <p className="text-sm text-green-400 mt-1">Coupon applied! Saved ৳{appliedCoupon.discountAmount}</p>
+              )}
               <p className="text-xs text-gray-400 mt-2">Will be deducted from your wallet balance (৳ {user?.walletBalance || 0}).</p>
             </div>
 
             <form onSubmit={handleJoin} className="space-y-4">
+              {/* Coupon Section */}
+              {tournament.entryFee > 0 && (
+              <div className="pt-2 pb-2 border-b border-gray-700">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Have a Coupon?</label>
+                <div className="flex gap-2">
+                  <input 
+                    placeholder="Enter code" 
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    disabled={appliedCoupon !== null || validatingCoupon}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent uppercase"
+                  />
+                  {!appliedCoupon ? (
+                    <Button type="button" variant="outline" onClick={handleApplyCoupon} disabled={!couponCode || validatingCoupon} className="whitespace-nowrap">
+                      {validatingCoupon ? '...' : 'Apply'}
+                    </Button>
+                  ) : (
+                    <Button type="button" variant="outline" className="text-red-400 border-red-900 hover:bg-red-900/20 whitespace-nowrap" onClick={() => { setAppliedCoupon(null); setCouponCode(''); }}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                {couponError && <p className="text-red-400 text-xs mt-1">{couponError}</p>}
+              </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">In-Game UID</label>
                 <input

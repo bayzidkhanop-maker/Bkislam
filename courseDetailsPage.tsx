@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getCourse, getCourseModules, getModuleLessons, getEnrollment, enrollInCourse, purchaseCourseWithWallet, getCourseReviews, createReview } from './firestoreService';
+import { getCourse, getCourseModules, getModuleLessons, getEnrollment, enrollInCourse, purchaseCourseWithWallet, getCourseReviews, createReview, validateCoupon } from './firestoreService';
 import { Course, CourseModule, Lesson, Enrollment, User, Review } from './models';
 import { Card, Loader, Button, Input } from './widgets';
 import { Star, Clock, BookOpen, PlayCircle, CheckCircle, Users, Globe, ChevronDown, ChevronUp, Lock } from 'lucide-react';
@@ -25,6 +25,12 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
   const [newReviewRating, setNewReviewRating] = useState(5);
   const [newReviewComment, setNewReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Coupon State
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountAmount: number } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState('');
 
   useEffect(() => {
     const fetchCourseData = async () => {
@@ -91,18 +97,44 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
     }
   };
 
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim() || !course) return;
+    setValidatingCoupon(true);
+    setCouponError('');
+    try {
+      const res = await validateCoupon(couponCode, currentUser.uid, course.price, course.id, course.category);
+      if (res.isValid && res.coupon) {
+        setAppliedCoupon({ code: res.coupon.code, discountAmount: res.discountAmount });
+        toast.success(`Coupon applied! You saved ৳${res.discountAmount}`);
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(res.error || 'Invalid coupon');
+        toast.error(res.error || 'Invalid coupon');
+      }
+    } catch (e: any) {
+      setCouponError('Error validating coupon');
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
+
   const submitPayment = async () => {
     if (!course || !currentUser) return;
 
+    let finalAmount = course.price;
+    if (appliedCoupon) {
+      finalAmount = Math.max(0, finalAmount - appliedCoupon.discountAmount);
+    }
+
     if (paymentMethod === 'Wallet') {
-      if ((currentUser.walletBalance || 0) < course.price) {
+      if ((currentUser.walletBalance || 0) < finalAmount) {
         toast.error("Insufficient wallet balance. Please add money first.");
         return;
       }
       setEnrolling(true);
       const toastId = toast.loading('Processing payment...');
       try {
-        await purchaseCourseWithWallet(currentUser.uid, course.id, course.price);
+        await purchaseCourseWithWallet(currentUser.uid, course.id, course.price, appliedCoupon?.code);
         toast.success('Payment successful! You are now enrolled.', { id: toastId });
         setShowPaymentModal(false);
         navigate(`/learn/${course.id}`);
@@ -114,7 +146,7 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
       return;
     }
 
-    if (!transactionId.trim()) {
+    if (!transactionId.trim() && finalAmount > 0) {
       toast.error('Please enter a valid Transaction ID');
       return;
     }
@@ -122,7 +154,7 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
     setEnrolling(true);
     const toastId = toast.loading('Submitting payment...');
     try {
-      await enrollInCourse(currentUser.uid, course.id, course.price, paymentMethod, transactionId);
+      await enrollInCourse(currentUser.uid, course.id, finalAmount, paymentMethod, transactionId);
       toast.success('Payment submitted! Awaiting admin approval.', { id: toastId });
       setShowPaymentModal(false);
       // Refresh enrollment status
@@ -149,7 +181,7 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
       const review = await createReview({
         courseId: course.id,
         userId: currentUser.uid,
-        userName: currentUser.displayName || 'Anonymous',
+        userName: currentUser.name || 'Anonymous',
         rating: newReviewRating,
         comment: newReviewComment
       });
@@ -456,14 +488,14 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
                 <div className="bg-indigo-50 p-4 rounded-xl text-sm text-indigo-800 border border-indigo-100">
                   <p className="font-bold mb-1">Pay with Wallet Balance</p>
                   <p>Current Balance: ৳ {(currentUser?.walletBalance || 0).toFixed(2)}</p>
-                  {(currentUser?.walletBalance || 0) < course.price && (
+                  {(currentUser?.walletBalance || 0) < (appliedCoupon ? Math.max(0, course.price - appliedCoupon.discountAmount) : course.price) && (
                     <p className="text-red-500 mt-2 font-semibold">Insufficient balance. Please add money to your wallet first.</p>
                   )}
                 </div>
               ) : (
                 <>
                   <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-700">
-                    <p className="mb-2">1. Send <strong>৳ {course.price}</strong> to this {paymentMethod} Personal number:</p>
+                    <p className="mb-2">1. Send <strong>৳ {appliedCoupon ? Math.max(0, course.price - appliedCoupon.discountAmount) : course.price}</strong> to this {paymentMethod} Personal number:</p>
                     <p className="text-lg font-bold text-gray-900 mb-4 tracking-wider">017XX-XXXXXX</p>
                     <p>2. Enter the Transaction ID below to verify your payment.</p>
                   </div>
@@ -479,6 +511,36 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
                   </div>
                 </>
               )}
+
+              {/* Coupon Section */}
+              <div className="pt-4 border-t border-gray-100">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Have a Coupon?</label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="Enter code" 
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    disabled={appliedCoupon !== null || validatingCoupon}
+                  />
+                  {!appliedCoupon ? (
+                    <Button variant="outline" onClick={handleApplyCoupon} disabled={!couponCode || validatingCoupon}>
+                      {validatingCoupon ? '...' : 'Apply'}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => { setAppliedCoupon(null); setCouponCode(''); }}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                {couponError && <p className="text-red-500 text-xs mt-1">{couponError}</p>}
+                
+                <div className="mt-4 bg-gray-50 p-3 rounded-lg flex justify-between items-center">
+                   <span className="text-gray-600 font-medium">Total Payable:</span>
+                   <span className="text-lg font-bold text-gray-900">
+                     ৳ {appliedCoupon ? Math.max(0, course.price - appliedCoupon.discountAmount).toFixed(2) : course.price.toFixed(2)}
+                   </span>
+                </div>
+              </div>
             </div>
             <div className="p-6 border-t border-gray-100 flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setShowPaymentModal(false)}>Cancel</Button>
