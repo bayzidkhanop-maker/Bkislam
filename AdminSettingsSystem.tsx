@@ -319,20 +319,57 @@ export const AdminSettingsSystem = ({ currentUser }: { currentUser: User }) => {
               </div>
             </div>
 
-            <h4 className="font-bold text-gray-900 dark:text-white mb-4 border-b border-gray-100 dark:border-gray-800 pb-2">Active Payment Gateways</h4>
-            <div className="space-y-3 pl-2">
-              <label className="flex items-center gap-3">
-                <input type="checkbox" checked={settings.financial.enableNagad} onChange={e => updateSection('financial', 'enableNagad', e.target.checked)} className="rounded text-indigo-600 w-5 h-5" />
-                <span className="font-medium text-gray-700 dark:text-gray-300">Nagad Mobile Banking</span>
-              </label>
-              <label className="flex items-center gap-3">
-                <input type="checkbox" checked={settings.financial.enableBkash} onChange={e => updateSection('financial', 'enableBkash', e.target.checked)} className="rounded text-indigo-600 w-5 h-5" />
-                <span className="font-medium text-gray-700 dark:text-gray-300">bKash Mobile Banking</span>
-              </label>
-              <label className="flex items-center gap-3">
-                <input type="checkbox" checked={settings.financial.enableCard} onChange={e => updateSection('financial', 'enableCard', e.target.checked)} className="rounded text-indigo-600 w-5 h-5" />
-                <span className="font-medium text-gray-700 dark:text-gray-300">Credit / Debit Cards (Stripe)</span>
-              </label>
+            <h4 className="font-bold text-gray-900 dark:text-white mb-4 border-b border-gray-100 dark:border-gray-800 pb-2">Active Payment Gateways & Configurations</h4>
+            <div className="space-y-4 pl-2">
+              <div className="space-y-2">
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={settings.financial.enableNagad} onChange={e => updateSection('financial', 'enableNagad', e.target.checked)} className="rounded text-indigo-600 w-5 h-5" />
+                  <span className="font-medium text-gray-700 dark:text-gray-300">Nagad Mobile Banking</span>
+                </label>
+                {settings.financial.enableNagad && (
+                  <div className="pl-8">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Nagad Personal Number</label>
+                    <Input value={settings.financial.nagadNumber || ''} onChange={e => updateSection('financial', 'nagadNumber', e.target.value)} placeholder="019XX-XXXXXX" />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={settings.financial.enableBkash} onChange={e => updateSection('financial', 'enableBkash', e.target.checked)} className="rounded text-indigo-600 w-5 h-5" />
+                  <span className="font-medium text-gray-700 dark:text-gray-300">bKash Mobile Banking</span>
+                </label>
+                {settings.financial.enableBkash && (
+                  <div className="pl-8">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">bKash Personal Number</label>
+                    <Input value={settings.financial.bKashNumber || ''} onChange={e => updateSection('financial', 'bKashNumber', e.target.value)} placeholder="017XX-XXXXXX" />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={settings.financial.enableCard} onChange={e => updateSection('financial', 'enableCard', e.target.checked)} className="rounded text-indigo-600 w-5 h-5" />
+                  <span className="font-medium text-gray-700 dark:text-gray-300">Rocket / Others</span>
+                </label>
+                {settings.financial.enableCard && (
+                  <div className="pl-8">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Rocket Personal Number</label>
+                    <Input value={settings.financial.rocketNumber || ''} onChange={e => updateSection('financial', 'rocketNumber', e.target.value)} placeholder="01XXX-XXXXXX" />
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Manual Payment Instructions (Displayed to Users)</label>
+                <textarea 
+                  value={settings.financial.paymentInstructions || ''} 
+                  onChange={e => updateSection('financial', 'paymentInstructions', e.target.value)}
+                  placeholder="E.g., Send money to the personal numbers and submit your Transaction ID to get approval."
+                  className="w-full bg-gray-50 border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-y dark:bg-gray-800 dark:border-gray-600 text-gray-900 dark:text-white"
+                  rows={4}
+                />
+              </div>
             </div>
           </Card>
         )}

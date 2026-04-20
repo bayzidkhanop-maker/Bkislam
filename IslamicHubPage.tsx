@@ -28,6 +28,9 @@ export const IslamicHubPage = ({ currentUser }: { currentUser: User }) => {
   // --- PRAYER STATE ---
   const [prayerTimes, setPrayerTimes] = useState<any | null>(null);
   const [locationError, setLocationError] = useState('');
+  const [compassHeading, setCompassHeading] = useState(0);
+  const [qiblaDirection, setQiblaDirection] = useState(0);
+  const [hasCompassPerm, setHasCompassPerm] = useState(false);
 
   // --- TASBIH STATE ---
   const [tasbihCount, setTasbihCount] = useState(0);
@@ -138,6 +141,18 @@ export const IslamicHubPage = ({ currentUser }: { currentUser: User }) => {
           const res = await fetch(`https://api.aladhan.com/v1/timings?latitude=${lat}&longitude=${lon}&method=2`);
           const data = await res.json();
           setPrayerTimes(data.data.timings);
+
+          // Calculate Qibla Direction (Mecca coordinates: 21.4225° N, 39.8262° E)
+          const phiK = 21.4225 * (Math.PI / 180.0);
+          const lambdaK = 39.8262 * (Math.PI / 180.0);
+          const phi = lat * (Math.PI / 180.0);
+          const lambda = lon * (Math.PI / 180.0);
+          const y = Math.sin(lambdaK - lambda);
+          const x = Math.cos(phi) * Math.tan(phiK) - Math.sin(phi) * Math.cos(lambdaK - lambda);
+          let qibla = Math.atan2(y, x) * (180.0 / Math.PI);
+          qibla = (qibla + 360.0) % 360.0;
+          setQiblaDirection(qibla);
+          
         } catch (e) {
           setLocationError("Could not fetch prayer times for your location.");
         }
@@ -148,6 +163,40 @@ export const IslamicHubPage = ({ currentUser }: { currentUser: User }) => {
       setLocationError("Geolocation is not supported by this browser.");
     }
   };
+
+  const requestCompassPermission = async () => {
+    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      try {
+        const permission = await (DeviceOrientationEvent as any).requestPermission();
+        if (permission === 'granted') {
+          setHasCompassPerm(true);
+          window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
+          window.addEventListener('deviceorientation', handleOrientation as any, true);
+        } else {
+          toast.error("Compass permission denied.");
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    } else {
+      // Non iOS 13+ devices
+      setHasCompassPerm(true);
+      window.addEventListener('deviceorientationabsolute', handleOrientation as any, true);
+      window.addEventListener('deviceorientation', handleOrientation as any, true);
+    }
+  };
+
+  const handleOrientation = (event: DeviceOrientationEvent) => {
+    let compass = event.webkitCompassHeading || Math.abs(event.alpha || 0 - 360);
+    if (compass) setCompassHeading(compass);
+  };
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', handleOrientation as any, true);
+      window.removeEventListener('deviceorientation', handleOrientation as any, true);
+    };
+  }, []);
 
   const fetchHadiths = async (category: string) => {
     setHadithLoading(true);
@@ -618,22 +667,36 @@ export const IslamicHubPage = ({ currentUser }: { currentUser: User }) => {
           </div>
           
           <div className="col-span-1 space-y-6">
-             <Card className="p-8 text-center shadow-sm">
-               <h3 className="text-xl font-bold mb-8 text-gray-900 dark:text-white">Qibla Direction</h3>
-               <div className="w-full aspect-square bg-gray-50 dark:bg-gray-800 rounded-full border-[12px] border-emerald-50 dark:border-emerald-900/20 flex items-center justify-center relative shadow-inner ring-1 ring-gray-200 dark:ring-gray-700 mx-auto max-w-sm">
-                  <Compass size={160} className="text-emerald-600 absolute opacity-20" />
-                  <Navigation size={80} className="text-red-500 transform rotate-45 z-10 filter drop-shadow-md" />
-                  <div className="absolute w-full h-[1px] bg-gray-300 dark:bg-gray-700"></div>
-                  <div className="absolute h-full w-[1px] bg-gray-300 dark:bg-gray-700"></div>
-                  
-                  {/* Compass markings */}
-                  <div className="absolute top-4 font-bold text-gray-400">N</div>
-                  <div className="absolute bottom-4 font-bold text-gray-400">S</div>
-                  <div className="absolute right-4 font-bold text-gray-400">E</div>
-                  <div className="absolute left-4 font-bold text-gray-400">W</div>
-               </div>
-               <p className="text-sm text-gray-500 mt-8 leading-relaxed">Point your phone to automatically align towards the Kaaba (Requires smartphone compass capabilities)</p>
-             </Card>
+               <Card className="p-8 text-center shadow-sm relative overflow-hidden">
+                 <h3 className="text-xl font-bold mb-8 text-gray-900 dark:text-white">Qibla Direction</h3>
+                 
+                 {!hasCompassPerm && (
+                   <div className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm z-20 flex flex-col items-center justify-center p-6 text-center">
+                     <Compass size={48} className="text-emerald-500 mb-4" />
+                     <p className="text-gray-900 dark:text-white font-bold mb-2">Compass Calibration</p>
+                     <p className="text-sm text-gray-500 mb-4">We need access to your device's compass to point you towards the Kaaba.</p>
+                     <Button onClick={requestCompassPermission} variant="primary">Enable Compass</Button>
+                   </div>
+                 )}
+
+                 <div className="w-full aspect-square bg-gray-50 dark:bg-gray-800 rounded-full border-[12px] border-emerald-50 dark:border-emerald-900/20 flex flex-col items-center justify-center relative shadow-inner ring-1 ring-gray-200 dark:ring-gray-700 mx-auto max-w-sm" style={{ transform: `rotate(${-compassHeading}deg)`, transition: 'transform 0.1s ease-out' }}>
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ transform: `rotate(${qiblaDirection}deg)` }}>
+                      <Navigation size={80} className="text-red-500 -translate-y-12 filter drop-shadow-md" fill="currentColor" />
+                    </div>
+                    <div className="absolute w-full h-[1px] bg-gray-300 dark:bg-gray-700"></div>
+                    <div className="absolute h-full w-[1px] bg-gray-300 dark:bg-gray-700"></div>
+                    
+                    {/* Compass markings */}
+                    <div className="absolute top-4 font-bold text-gray-400">N</div>
+                    <div className="absolute bottom-4 font-bold text-gray-400">S</div>
+                    <div className="absolute right-4 font-bold text-gray-400">E</div>
+                    <div className="absolute left-4 font-bold text-gray-400">W</div>
+                 </div>
+                 <div className="mt-8">
+                   <p className="text-2xl font-bold text-emerald-600 mb-1">{Math.round(qiblaDirection)}°</p>
+                   <p className="text-sm text-gray-500 leading-relaxed max-w-xs mx-auto">Turn your device until the red arrow points straight up to face the Kaaba.</p>
+                 </div>
+               </Card>
           </div>
         </div>
       )}

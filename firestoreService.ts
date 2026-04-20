@@ -1445,7 +1445,7 @@ export const registerForTournament = async (registrationData: Omit<TournamentReg
     
     // Create notification for the user
     await createNotification({
-      userId: registrationData.userId,
+      uid: registrationData.userId,
       title: 'Tournament Registration',
       message: `You have successfully registered for the tournament. Status: ${newRegistration.status}`,
       type: 'system',
@@ -1486,7 +1486,7 @@ export const updateRegistrationStatus = async (id: string, status: 'approved' | 
     await updateDoc(doc(db, 'tournamentRegistrations', id), { status });
     
     await createNotification({
-      userId,
+      uid: userId,
       title: 'Tournament Registration Update',
       message: `Your registration has been ${status}.`,
       type: 'system',
@@ -2369,5 +2369,27 @@ export const validateCoupon = async (code: string, userId: string, purchaseAmoun
     return { isValid: true, discountAmount: discount, coupon };
   } catch (error) {
     return { isValid: false, discountAmount: 0, error: 'Error validating coupon' };
+  }
+};
+
+export const subscribeToNotifications = (userId: string, callback: (notifications: Notification[]) => void) => {
+  const q = query(
+    collection(db, 'notifications'), 
+    where('uid', '==', userId)
+  );
+  
+  return onSnapshot(q, (snapshot) => {
+    const notifications = snapshot.docs.map(doc => doc.data() as Notification);
+    callback(notifications.sort((a, b) => b.createdAt - a.createdAt));
+  }, (error) => {
+    console.error("Error subscribing to notifications:", error);
+  });
+};
+
+export const markNotificationAsRead = async (notificationId: string) => {
+  try {
+    await updateDoc(doc(db, 'notifications', notificationId), { read: true });
+  } catch (error) {
+    console.error("Error marking notification as read", error);
   }
 };

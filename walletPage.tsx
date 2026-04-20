@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User, Transaction, WithdrawalRequest } from './models';
-import { getUserTransactions, submitAddMoneyRequest, requestWithdrawal, getUserWithdrawals } from './firestoreService';
+import { subscribeToUserTransactions, submitAddMoneyRequest, requestWithdrawal, subscribeToUserWithdrawals } from './firestoreService';
 import { Card, Button, Input, Loader } from './widgets';
 import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,23 +26,32 @@ export const WalletPage = ({ currentUser }: { currentUser: User }) => {
   const [withdrawAccount, setWithdrawAccount] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!currentUser) return;
-      setLoading(true);
-      try {
-        const [txs, wds] = await Promise.all([
-          getUserTransactions(currentUser.uid),
-          getUserWithdrawals(currentUser.uid)
-        ]);
-        setTransactions(txs);
-        setWithdrawals(wds);
-      } catch (error) {
-        console.error("Error fetching wallet data:", error);
-      } finally {
-        setLoading(false);
-      }
+    if (!currentUser) return;
+    setLoading(true);
+
+    let fetchedTxs = false;
+    let fetchedWds = false;
+
+    const checkLoading = () => {
+      if (fetchedTxs && fetchedWds) setLoading(false);
     };
-    fetchData();
+
+    const unsubTxs = subscribeToUserTransactions(currentUser.uid, (txs) => {
+      setTransactions(txs);
+      fetchedTxs = true;
+      checkLoading();
+    });
+
+    const unsubWds = subscribeToUserWithdrawals(currentUser.uid, (wds) => {
+      setWithdrawals(wds);
+      fetchedWds = true;
+      checkLoading();
+    });
+
+    return () => {
+      unsubTxs();
+      unsubWds();
+    };
   }, [currentUser]);
 
   const handleAddMoney = async () => {

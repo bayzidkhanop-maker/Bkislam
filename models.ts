@@ -335,6 +335,10 @@ export interface PlatformSettings {
     enableNagad: boolean;
     enableBkash: boolean;
     enableCard: boolean;
+    bKashNumber?: string;
+    nagadNumber?: string;
+    rocketNumber?: string;
+    paymentInstructions?: string;
   };
   security: {
     require2FA: boolean;

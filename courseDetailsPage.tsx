@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getCourse, getCourseModules, getModuleLessons, getEnrollment, enrollInCourse, purchaseCourseWithWallet, getCourseReviews, createReview, validateCoupon } from './firestoreService';
-import { Course, CourseModule, Lesson, Enrollment, User, Review } from './models';
+import { getCourse, getCourseModules, getModuleLessons, getEnrollment, enrollInCourse, purchaseCourseWithWallet, getCourseReviews, createReview, validateCoupon, getPlatformSettings } from './firestoreService';
+import { uploadMedia } from './storageService';
+import { Course, CourseModule, Lesson, Enrollment, User, Review, PlatformSettings } from './models';
 import { Card, Loader, Button, Input } from './widgets';
-import { Star, Clock, BookOpen, PlayCircle, CheckCircle, Users, Globe, ChevronDown, ChevronUp, Lock } from 'lucide-react';
+import { Star, Clock, BookOpen, PlayCircle, CheckCircle, Users, Globe, ChevronDown, ChevronUp, Lock, UploadCloud } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 
@@ -16,11 +17,13 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
   const [lessonsByModule, setLessonsByModule] = useState<Record<string, Lesson[]>>({});
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'bKash' | 'Nagad' | 'Wallet'>('Wallet');
   const [transactionId, setTransactionId] = useState('');
+  const [proofFile, setProofFile] = useState<File | null>(null);
   const [enrolling, setEnrolling] = useState(false);
   const [newReviewRating, setNewReviewRating] = useState(5);
   const [newReviewComment, setNewReviewComment] = useState('');
@@ -57,6 +60,9 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
             const fetchedEnrollment = await getEnrollment(currentUser.uid, courseId);
             setEnrollment(fetchedEnrollment);
           }
+
+          const platformSettings = await getPlatformSettings();
+          setSettings(platformSettings);
 
           // Expand first module by default
           if (fetchedModules.length > 0) {
@@ -154,9 +160,19 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
     setEnrolling(true);
     const toastId = toast.loading('Submitting payment...');
     try {
-      await enrollInCourse(currentUser.uid, course.id, finalAmount, paymentMethod, transactionId);
+      let proofUrl = undefined;
+      if (proofFile) {
+        toast.loading('Uploading screenshot...', { id: toastId });
+        proofUrl = await uploadMedia(proofFile, `transactions/${currentUser.uid}/${Date.now()}_${proofFile.name}`);
+      }
+
+      toast.loading('Finalizing enrollment...', { id: toastId });
+      await enrollInCourse(currentUser.uid, course.id, finalAmount, paymentMethod, transactionId, proofUrl);
+      
       toast.success('Payment submitted! Awaiting admin approval.', { id: toastId });
       setShowPaymentModal(false);
+      setProofFile(null);
+      setTransactionId('');
       // Refresh enrollment status
       const fetchedEnrollment = await getEnrollment(currentUser.uid, course.id);
       setEnrollment(fetchedEnrollment);
@@ -494,10 +510,14 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
                 </div>
               ) : (
                 <>
-                  <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-700">
+                  <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-700 whitespace-pre-line">
                     <p className="mb-2">1. Send <strong>৳ {appliedCoupon ? Math.max(0, course.price - appliedCoupon.discountAmount) : course.price}</strong> to this {paymentMethod} Personal number:</p>
-                    <p className="text-lg font-bold text-gray-900 mb-4 tracking-wider">017XX-XXXXXX</p>
-                    <p>2. Enter the Transaction ID below to verify your payment.</p>
+                    <p className="text-lg font-bold text-gray-900 mb-4 tracking-wider">
+                      {paymentMethod === 'bKash' ? settings?.financial?.bKashNumber || 'Not configured' : 
+                       paymentMethod === 'Nagad' ? settings?.financial?.nagadNumber || 'Not configured' : 
+                       'Not configured'}
+                    </p>
+                    <p>{settings?.financial?.paymentInstructions || '2. Enter the Transaction ID below to verify your payment.'}</p>
                   </div>
 
                   <div>
@@ -508,6 +528,19 @@ export const CourseDetailsPage = ({ currentUser }: { currentUser: User }) => {
                       onChange={(e) => setTransactionId(e.target.value)}
                       className="uppercase"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Screenshot (Optional)</label>
+                    <div className="flex items-center gap-3">
+                      <label className="flex-1 border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors">
+                        <UploadCloud className="mx-auto text-gray-400 mb-2" size={24} />
+                        <span className="text-sm text-gray-500">{proofFile ? proofFile.name : 'Upload Screenshot'}</span>
+                        <input type="file" className="hidden" accept="image/*" onChange={e => setProofFile(e.target.files?.[0] || null)} />
+                      </label>
+                      {proofFile && (
+                        <button className="p-2 text-red-500 hover:bg-red-50 rounded-lg" onClick={() => setProofFile(null)}>Clear</button>
+                      )}
+                    </div>
                   </div>
                 </>
               )}

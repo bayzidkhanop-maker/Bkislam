@@ -4,12 +4,13 @@ import {
   Search, Bell, MessageSquare, Wallet, Globe, Moon, Sun, 
   Menu, X, ChevronDown, BookOpen, Trophy, Compass, 
   LogOut, User as UserIcon, Settings, ShieldAlert,
-  Clock, MapPin, CheckCircle, WifiOff, Download, Mic
+  Clock, MapPin, CheckCircle, WifiOff, Download, Mic, Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User } from './models';
+import { User, Notification } from './models';
 import { signOut } from './authService';
 import { cn } from './widgets';
+import { subscribeToNotifications, markNotificationAsRead } from './firestoreService';
 
 export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => void }) => {
   const navigate = useNavigate();
@@ -18,6 +19,17 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
   const [isDark, setIsDark] = useState(false);
   const [lang, setLang] = useState('EN');
   const [showLangMenu, setShowLangMenu] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    if (user) {
+      const unsub = subscribeToNotifications(user.uid, (data) => {
+        setNotifications(data);
+      });
+      return () => unsub();
+    }
+  }, [user]);
 
   // Apply RTL for Arabic
   useEffect(() => {
@@ -443,7 +455,9 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                   className="relative p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
                 >
                   <Bell size={18} />
-                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">3</span>
+                  {unreadCount > 0 && (
+                    <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-white dark:border-gray-900">{unreadCount}</span>
+                  )}
                 </button>
 
                 <AnimatePresence>
@@ -456,30 +470,33 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                     >
                       <div className="p-3 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
                         <h3 className="font-bold text-gray-900 dark:text-white">Notifications</h3>
-                        <button className="text-xs text-indigo-600 hover:text-indigo-700 font-medium">Mark all read</button>
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
-                        <div className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex gap-3 cursor-pointer transition-colors">
-                          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
-                            <Trophy size={14} className="text-indigo-600" />
+                        {notifications.length > 0 ? (
+                          notifications.slice(0, 10).map((notif, idx) => (
+                            <Link 
+                              key={notif.id || idx} 
+                              to={notif.link || "/notifications"} 
+                              className={`flex p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 gap-3 cursor-pointer transition-colors ${!notif.read ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : ''}`}
+                              onClick={() => { if (!notif.read) markNotificationAsRead(notif.id); setShowNotifications(false); }}
+                            >
+                              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center shrink-0">
+                                <Bell size={14} className="text-indigo-600" />
+                              </div>
+                              <div>
+                                <p className="text-sm text-gray-900 dark:text-white"><span className="font-bold">{notif.title || 'Notification'}</span> {notif.message}</p>
+                                <p className="text-xs text-gray-500 mt-1">{new Date(notif.createdAt).toLocaleString()}</p>
+                              </div>
+                            </Link>
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            No notifications yet
                           </div>
-                          <div>
-                            <p className="text-sm text-gray-900 dark:text-white"><span className="font-bold">Tournament Started!</span> Join the weekly coding challenge now.</p>
-                            <p className="text-xs text-gray-500 mt-1">2 mins ago</p>
-                          </div>
-                        </div>
-                        <div className="p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex gap-3 cursor-pointer transition-colors">
-                          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                            <Wallet size={14} className="text-green-600" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-gray-900 dark:text-white"><span className="font-bold">Payment Received</span> ৳ 500 has been added to your wallet.</p>
-                            <p className="text-xs text-gray-500 mt-1">1 hour ago</p>
-                          </div>
-                        </div>
+                        )}
                       </div>
                       <div className="p-2 border-t border-gray-100 dark:border-gray-700 text-center">
-                        <Link to="/notifications" className="text-sm text-indigo-600 font-medium hover:underline">View all notifications</Link>
+                        <Link to="/notifications" onClick={() => setShowNotifications(false)} className="text-sm text-indigo-600 font-medium hover:underline">View all notifications</Link>
                       </div>
                     </motion.div>
                   )}
