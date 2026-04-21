@@ -5,6 +5,9 @@ import { User } from './models';
 import { Card, Button, Input } from './widgets';
 import { toast } from 'sonner';
 import { Camera, User as UserIcon, Save } from 'lucide-react';
+import { DeviceStorageSettings } from './DeviceStorageSettings';
+import { AudioSettings } from './AudioSettings';
+import { soundService } from './soundService';
 
 export const SettingsPage = ({ currentUser }: { currentUser: User }) => {
   const [name, setName] = useState(currentUser.name);
@@ -66,8 +69,8 @@ export const SettingsPage = ({ currentUser }: { currentUser: User }) => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-24">
-      <div className="mb-8">
+    <div className="max-w-2xl mx-auto p-4 sm:p-6 pb-24 space-y-8">
+      <div>
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">Settings</h1>
         <p className="text-gray-500">Manage your profile and account preferences</p>
       </div>
@@ -144,6 +147,7 @@ export const SettingsPage = ({ currentUser }: { currentUser: User }) => {
               type="submit" 
               disabled={saving || (!name.trim())} 
               className="w-full sm:w-auto px-8 gap-2"
+              onClick={() => soundService.play('click')}
             >
               <Save size={18} />
               {saving ? 'Saving...' : 'Save Changes'}
@@ -151,6 +155,10 @@ export const SettingsPage = ({ currentUser }: { currentUser: User }) => {
           </div>
         </form>
       </Card>
+
+      <AudioSettings />
+
+      <DeviceStorageSettings />
     </div>
   );
 };

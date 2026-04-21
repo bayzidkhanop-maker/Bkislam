@@ -77,6 +77,7 @@ export const startCall = async (callerId: string, receiverId: string, type: 'aud
   };
 
   await setDoc(callDoc, callData);
+  notifyListeners(callId, false, callData);
 
   unsubscribeCall = onSnapshot(callDoc, (snapshot) => {
     const data = snapshot.data() as Call;
@@ -201,6 +202,7 @@ export const endCall = async () => {
   if (unsubscribeCallerCandidates) unsubscribeCallerCandidates();
   if (unsubscribeReceiverCandidates) unsubscribeReceiverCandidates();
   
+  notifyListeners(null, false, null);
   currentCallId = null;
 };
 
@@ -212,6 +214,9 @@ export const subscribeToIncomingCalls = (userId: string, callback: (call: Call |
       const call = doc.data() as Call;
       if (call.status === 'calling' || call.status === 'ringing') {
         incomingCall = call;
+        notifyListeners(call.id, true, call);
+      } else if (call.status === 'accepted' || call.status === 'ended' || call.status === 'rejected') {
+        // notify logic is handled effectively at this layer since it propagates
       }
     });
     callback(incomingCall);
@@ -228,6 +233,21 @@ export const subscribeToActiveCall = (callId: string, callback: (call: Call) => 
   }, (error) => {
     handleFirestoreError(error, OperationType.GET, `calls/${callId}`);
   });
+};
+
+type CallStateListener = (callId: string | null, isIncoming: boolean, call?: Call | null) => void;
+const callListeners: CallStateListener[] = [];
+
+export const onCallStateChange = (listener: CallStateListener) => {
+  callListeners.push(listener);
+  return () => {
+    const index = callListeners.indexOf(listener);
+    if (index > -1) callListeners.splice(index, 1);
+  };
+};
+
+const notifyListeners = (callId: string | null, isIncoming: boolean, call?: Call | null) => {
+  callListeners.forEach(l => l(callId, isIncoming, call));
 };
 
 export const toggleAudio = (enabled: boolean) => {

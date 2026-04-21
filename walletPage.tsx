@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { User, Transaction, WithdrawalRequest } from './models';
-import { subscribeToUserTransactions, submitAddMoneyRequest, requestWithdrawal, subscribeToUserWithdrawals } from './firestoreService';
+import { subscribeToUserTransactions, submitAddMoneyRequest, requestWithdrawal, subscribeToUserWithdrawals, getUserTransactions, getUserWithdrawals } from './firestoreService';
 import { Card, Button, Input, Loader } from './widgets';
 import { Wallet, ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';

@@ -45,7 +45,7 @@ export const getFeedPosts = async (limitCount: number = 10): Promise<Post[]> => 
   try {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(limitCount));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => doc.data() as Post);
+    return snapshot.docs.map(doc => doc.data() as Post).filter(p => !p.isDeleted);
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, 'posts');
     throw error;
@@ -427,6 +427,16 @@ export const submitAddMoneyRequest = async (
   }
 };
 
+export const subscribeToUserTransactions = (userId: string, callback: (transactions: Transaction[]) => void) => {
+  const q = query(collection(db, 'transactions'), where('userId', '==', userId));
+  return onSnapshot(q, (snapshot) => {
+    const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
+    callback(transactions.sort((a, b) => b.createdAt - a.createdAt));
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'transactions');
+  });
+};
+
 export const getUserTransactions = async (userId: string): Promise<Transaction[]> => {
   try {
     const q = query(collection(db, 'transactions'), where('userId', '==', userId));
@@ -486,6 +496,16 @@ export const requestWithdrawal = async (
     handleFirestoreError(error, OperationType.WRITE, 'withdrawalRequests');
     throw error;
   }
+};
+
+export const subscribeToUserWithdrawals = (userId: string, callback: (withdrawals: WithdrawalRequest[]) => void) => {
+  const q = query(collection(db, 'withdrawalRequests'), where('userId', '==', userId));
+  return onSnapshot(q, (snapshot) => {
+    const withdrawals = snapshot.docs.map(doc => doc.data() as WithdrawalRequest);
+    callback(withdrawals.sort((a, b) => b.createdAt - a.createdAt));
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'withdrawalRequests');
+  });
 };
 
 export const getUserWithdrawals = async (userId: string): Promise<WithdrawalRequest[]> => {
@@ -1077,7 +1097,7 @@ export const issueCertificate = async (enrollmentId: string, certificateUrl: str
   }
 };
 
-export const enrollInCourse = async (userId: string, courseId: string, amount: number, method: string, transactionId: string): Promise<void> => {
+export const enrollInCourse = async (userId: string, courseId: string, amount: number, method: string, transactionId: string, proofUrl?: string): Promise<void> => {
   try {
     const paymentId = generateId();
     const enrollmentId = generateId();
@@ -1107,7 +1127,7 @@ export const enrollInCourse = async (userId: string, courseId: string, amount: n
       enrolledAt: Date.now()
     };
 
-    const transaction = {
+    const transaction: any = {
       id: txId,
       userId,
       type: 'course_purchase',
@@ -1119,6 +1139,9 @@ export const enrollInCourse = async (userId: string, courseId: string, amount: n
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
+    if (proofUrl) {
+      transaction.proofUrl = proofUrl;
+    }
 
     const batch = writeBatch(db);
     batch.set(doc(db, 'payments', paymentId), payment);
@@ -1445,7 +1468,7 @@ export const registerForTournament = async (registrationData: Omit<TournamentReg
     
     // Create notification for the user
     await createNotification({
-      uid: registrationData.userId,
+      userId: registrationData.userId,
       title: 'Tournament Registration',
       message: `You have successfully registered for the tournament. Status: ${newRegistration.status}`,
       type: 'system',
@@ -1486,7 +1509,7 @@ export const updateRegistrationStatus = async (id: string, status: 'approved' | 
     await updateDoc(doc(db, 'tournamentRegistrations', id), { status });
     
     await createNotification({
-      uid: userId,
+      userId,
       title: 'Tournament Registration Update',
       message: `Your registration has been ${status}.`,
       type: 'system',
@@ -1976,6 +1999,19 @@ export const updateAutoModSettings = async (settings: Partial<AutoModSettings>, 
   }
 };
 
+export const subscribeToPlatformSettings = (callback: (settings: PlatformSettings | null) => void) => {
+  const docRef = doc(db, 'settings', 'platform');
+  return onSnapshot(docRef, (docSnap) => {
+    if (docSnap.exists()) {
+      callback(docSnap.data() as PlatformSettings);
+    } else {
+      callback(null);
+    }
+  }, (error) => {
+    console.error("Failed to subscribe to platform settings:", error);
+  });
+};
+
 export const getPlatformSettings = async (): Promise<PlatformSettings | null> => {
   try {
     const docRef = doc(db, 'settings', 'platform');
@@ -2375,7 +2411,7 @@ export const validateCoupon = async (code: string, userId: string, purchaseAmoun
 export const subscribeToNotifications = (userId: string, callback: (notifications: Notification[]) => void) => {
   const q = query(
     collection(db, 'notifications'), 
-    where('uid', '==', userId)
+    where('userId', '==', userId)
   );
   
   return onSnapshot(q, (snapshot) => {

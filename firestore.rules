@@ -212,13 +212,22 @@ service cloud.firestore {
                       // Allow other users to follow/unfollow
                       (
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followers', 'followersCount']) &&
-                        math.abs(request.resource.data.followersCount - resource.data.get('followersCount', 0)) == 1
+                        (request.resource.data.get('followersCount', 0) == resource.data.get('followersCount', 0) + 1 || 
+                         request.resource.data.get('followersCount', 0) == resource.data.get('followersCount', 0) - 1 ||
+                         request.resource.data.get('followersCount', 0) == resource.data.get('followersCount', 0))
                       ) ||
                       // Allow user to follow/unfollow others
                       (
                         isOwner(userId) &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['following', 'followingCount']) &&
-                        math.abs(request.resource.data.followingCount - resource.data.get('followingCount', 0)) == 1
+                        (request.resource.data.get('followingCount', 0) == resource.data.get('followingCount', 0) + 1 || 
+                         request.resource.data.get('followingCount', 0) == resource.data.get('followingCount', 0) - 1 ||
+                         request.resource.data.get('followingCount', 0) == resource.data.get('followingCount', 0))
+                      ) ||
+                      // Allow cross-user payments
+                      (
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['walletBalance', 'totalEarnings']) && 
+                        request.resource.data.get('walletBalance', 0) > resource.data.get('walletBalance', 0)
                       )
                     );
       allow delete: if isAdmin();
@@ -427,10 +436,10 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.uid || request.auth.uid == resource.data.userId);
+      allow read: if isAuthenticated() && (resource == null || request.auth.uid == resource.data.uid);
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (request.auth.uid == resource.data.uid || request.auth.uid == resource.data.userId);
-      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.uid || request.auth.uid == resource.data.userId);
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.uid;
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.uid;
     }
 
     match /books/{bookId} {

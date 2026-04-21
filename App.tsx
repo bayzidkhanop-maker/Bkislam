@@ -32,7 +32,7 @@ import { TournamentCreatePage } from './TournamentCreatePage';
 
 import { InboxPage } from './inboxPage';
 import { CallOverlay } from './CallOverlay';
-import { subscribeToIncomingCalls } from './callService';
+import { subscribeToIncomingCalls, onCallStateChange } from './callService';
 import { Call } from './models';
 import { IslamicHubPage } from './IslamicHubPage';
 
@@ -56,13 +56,33 @@ export const App = () => {
 
   useEffect(() => {
     if (user) {
-      const unsubscribe = subscribeToIncomingCalls(user.uid, (call) => {
+      const unsubIncoming = subscribeToIncomingCalls(user.uid, (call) => {
         setIncomingCall(call);
         if (call && call.status === 'accepted') {
            setActiveCallId(call.id);
         }
       });
-      return () => unsubscribe();
+      
+      const unsubState = onCallStateChange((callId, isIncoming, callData) => {
+        if (!isIncoming) {
+          // I started a call
+          if (callId) {
+             setActiveCallId(callId);
+          } else {
+             setActiveCallId(null);
+          }
+        } else {
+          // This allows dynamic routing of accepted calls into overlay for receiver
+           if (callData?.status === 'accepted') {
+             setActiveCallId(callId);
+           }
+        }
+      });
+      
+      return () => {
+        unsubIncoming();
+        unsubState();
+      };
     }
   }, [user]);
 

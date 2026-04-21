@@ -7,10 +7,12 @@ import {
   Clock, MapPin, CheckCircle, WifiOff, Download, Mic, Heart
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Notification } from './models';
+import { User, Notification, PlatformSettings } from './models';
 import { signOut } from './authService';
 import { cn } from './widgets';
-import { subscribeToNotifications, markNotificationAsRead } from './firestoreService';
+import { subscribeToNotifications, markNotificationAsRead, subscribeToPlatformSettings } from './firestoreService';
+import { soundService } from './soundService';
+import { Volume2, VolumeX } from 'lucide-react';
 
 export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => void }) => {
   const navigate = useNavigate();
@@ -20,7 +22,15 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
   const [lang, setLang] = useState('EN');
   const [showLangMenu, setShowLangMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    const unsub = subscribeToPlatformSettings((settings) => {
+      setPlatformSettings(settings);
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -227,10 +237,18 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
               </button>
               
               <Link to="/" className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                  <span className="text-white font-bold text-xl leading-none">D</span>
-                </div>
-                <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight hidden sm:block">Deenstream</h1>
+                {platformSettings?.branding?.logoLight ? (
+                  <img src={platformSettings.branding.logoLight} alt="Logo" className="w-8 h-8 object-contain" />
+                ) : (
+                  <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-xl leading-none">
+                      {(platformSettings?.general?.siteName || 'Deenstream').substring(0, 1).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <h1 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight hidden sm:block">
+                  {platformSettings?.general?.siteName || 'Deenstream'}
+                </h1>
               </Link>
 
               {/* Desktop Mega Menu */}
@@ -436,6 +454,20 @@ export const Header = ({ user, onMenuClick }: { user: User, onMenuClick: () => v
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* Sound Toggle */}
+              <button
+                onClick={() => {
+                  soundService.saveSettings({ enabled: !soundService.getSettings().enabled });
+                  // Force re-render simple trick since we don't have a hook for this top level
+                  setLang(lang);
+                  if (soundService.getSettings().enabled) soundService.play('success');
+                }}
+                className="hidden sm:flex p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
+                title="Toggle Sound"
+              >
+                {soundService.getSettings().enabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              </button>
 
               {/* Theme Toggle */}
               <button onClick={toggleTheme} className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">

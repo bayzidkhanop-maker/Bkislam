@@ -187,8 +187,14 @@ export const IslamicHubPage = ({ currentUser }: { currentUser: User }) => {
   };
 
   const handleOrientation = (event: DeviceOrientationEvent) => {
-    let compass = event.webkitCompassHeading || Math.abs(event.alpha || 0 - 360);
-    if (compass) setCompassHeading(compass);
+    let compass = (event as any).webkitCompassHeading;
+    if (compass === undefined && event.alpha !== null) {
+      // Browsers use alpha as degrees counterclockwise from North, so heading is 360 - alpha
+      compass = 360 - event.alpha;
+    }
+    if (compass !== undefined && compass !== null) {
+      setCompassHeading(compass);
+    }
   };
 
   useEffect(() => {
